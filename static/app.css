@@ -1,0 +1,77 @@
+/* static/app.css */
+:root{
+  --accent: #3FE0D0;
+}
+
+.btn-accent{
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #003b37;
+  font-weight: 600;
+}
+
+.btn-accent:hover{
+  background: #2fd1c2;
+  border-color: #2fd1c2;
+  color: #003b37;
+}
+
+.btn-outline-accent{
+  border-color: var(--accent);
+  color: #006b63;
+}
+
+.btn-outline-accent:hover{
+  background: var(--accent);
+  color: #003b37;
+}
+
+code{
+  color: #0d6efd;
+}
+
+/* ---------- Шапка ---------- */
+.site-header{
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+}
+
+/* ---------- Горизонтальное меню ---------- */
+.main-nav{
+  background: #0d3b66;
+}
+
+.main-nav .nav-link{
+  color: #cfe2ff;
+}
+
+.main-nav .nav-link:hover,
+.main-nav .nav-link:focus{
+  color: #ffffff;
+}
+
+.main-nav .nav-link.active{
+  color: #ffffff;
+  font-weight: 600;
+  border-bottom: 3px solid var(--accent);
+}
+
+.main-nav .dropdown-menu{
+  margin-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+/* ---------- Строка поисковика под меню ---------- */
+.search-bar{
+  background: #eef4fb;
+}
+
+/* ---------- Главная ---------- */
+.hero-block{
+  background: linear-gradient(120deg, #e3f2fd 0%, #e0f7f4 100%);
+}
+
+/* ---------- Подвал ---------- */
+.site-footer{
+  background: #0d3b66;
+}

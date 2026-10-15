@@ -1,0 +1,40 @@
+<!-- templates/xml.html -->
+{% extends "base.html" %}
+{% block title %}XML доступ к данным · {{ org_name }}{% endblock %}
+{% block content %}
+
+<h1 class="h3 mb-3">XML доступ к данным</h1>
+<p>
+  Сайт предоставляет данные из базы в формате XML. Ленты формируются сервером
+  на основе актуального содержимого баз данных.
+</p>
+
+<div class="row g-4">
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">Новости сайта (XML)</div>
+      <div class="card-body">
+        <p>Все новости поликлиники из базы сайта в формате XML.</p>
+        <a class="btn btn-accent" href="{{ url_for('xml_news') }}" target="_blank">
+          Открыть /xml/news</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">Записи на приём (XML)</div>
+      <div class="card-body">
+        <p>Последние 100 записей на приём из базы поликлиники (активная база: {{ active_db_key }}).</p>
+        <a class="btn btn-accent" href="{{ url_for('xml_appointments') }}" target="_blank">
+          Открыть /xml/appointments</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="alert alert-secondary mt-4">
+  XML-ленты можно подключать внешним приложениям или обрабатывать через XSL
+  (тема следующей лабораторной работы).
+</div>
+
+{% endblock %}

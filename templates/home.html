@@ -1,0 +1,72 @@
+<!-- templates/home.html -->
+{% extends "base.html" %}
+{% block title %}Главная · {{ org_name }}{% endblock %}
+{% block content %}
+
+<div class="p-4 p-md-5 mb-4 rounded-3 hero-block">
+  <div class="container-fluid py-3">
+    <h1 class="display-6 fw-bold">{{ org_name }}</h1>
+    <p class="col-md-8 fs-5">
+      Забота о вашем здоровье каждый день. Запись на приём к врачу онлайн,
+      актуальные новости, расписание специалистов и полезная информация
+      для пациентов.
+    </p>
+    <a class="btn btn-accent btn-lg" href="{{ url_for('app_home') }}">Записаться на приём</a>
+    <a class="btn btn-outline-secondary btn-lg" href="{{ url_for('about') }}">О клинике</a>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-md-8">
+    <h2 class="h4 mb-3">Для кого этот сайт</h2>
+    <p>
+      Сайт предназначен для <span class="text-primary fw-semibold">пациентов поликлиники</span>
+      и жителей города. Здесь вы можете:
+    </p>
+    <ul>
+      <li>записаться на приём к терапевту, педиатру, хирургу и другим специалистам;</li>
+      <li>узнать <a href="{{ url_for('about') }}#schedule">расписание приёма врачей</a>;</li>
+      <li>читать <a href="{{ url_for('news') }}">новости поликлиники</a>;</li>
+      <li>найти <a href="{{ url_for('contacts') }}">контактные данные и схему проезда</a>;</li>
+      <li>воспользоваться <a href="{{ url_for('services') }}">сервисами сайта</a>
+          (погода, курсы валют, поиск, топ страниц).</li>
+    </ul>
+
+    <h2 class="h4 mt-4 mb-3">Последние новости</h2>
+    {% for n in latest_news %}
+    <div class="card shadow-sm mb-2">
+      <div class="card-body">
+        <div class="text-muted small">{{ n.published_at }}</div>
+        <div class="fw-semibold">{{ n.title }}</div>
+        <p class="mb-0">{{ n.body }}</p>
+      </div>
+    </div>
+    {% endfor %}
+    <a href="{{ url_for('news') }}">Все новости →</a>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card shadow-sm mb-3">
+      <div class="card-header bg-white fw-semibold">Режим работы</div>
+      <div class="card-body small">
+        <div>Пн–Пт: <b>8:00 – 20:00</b></div>
+        <div>Сб: <b>9:00 – 14:00</b></div>
+        <div>Вс: <b>выходной</b></div>
+        <hr>
+        <div>Регистратура: +7 (48439) 2-11-11</div>
+      </div>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-header bg-white fw-semibold">Сервисы</div>
+      <div class="list-group list-group-flush">
+        <a class="list-group-item list-group-item-action" href="{{ url_for('services') }}">Погода и курсы валют</a>
+        <a class="list-group-item list-group-item-action" href="{{ url_for('top') }}">Топ страниц сайта</a>
+        <a class="list-group-item list-group-item-action" href="{{ url_for('site_search') }}">Поиск по сайту</a>
+        <a class="list-group-item list-group-item-action" href="{{ url_for('contacts') }}">Карта проезда</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

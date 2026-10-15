@@ -1,0 +1,55 @@
+<!-- templates/links.html -->
+{% extends "base.html" %}
+{% block title %}Полезные ссылки · {{ org_name }}{% endblock %}
+{% block content %}
+
+<h1 class="h3 mb-3">Полезные ссылки</h1>
+<p class="text-muted">Дополнительная информация по теме «здоровье и медицина».</p>
+
+<div class="row g-4">
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">Официальные ресурсы</div>
+      <div class="list-group list-group-flush">
+        <a class="list-group-item list-group-item-action"
+           href="https://minzdrav.gov.ru" target="_blank" rel="noopener">
+          Министерство здравоохранения РФ</a>
+        <a class="list-group-item list-group-item-action"
+           href="https://www.gosuslugi.ru" target="_blank" rel="noopener">
+          Портал государственных услуг «Госуслуги»</a>
+        <a class="list-group-item list-group-item-action"
+           href="https://www.ffoms.gov.ru" target="_blank" rel="noopener">
+          Фонд обязательного медицинского страхования</a>
+        <a class="list-group-item list-group-item-action"
+           href="https://www.rosminzdrav.ru" target="_blank" rel="noopener">
+          Портал «Онлайнинспекция.рф» — проверка полиса ОМС</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">Здоровье и запись к врачу</div>
+      <div class="list-group list-group-flush">
+        <a class="list-group-item list-group-item-action"
+           href="https://www.emias.info" target="_blank" rel="noopener">
+          ЕМИАС — единая запись на приём (Московская область)</a>
+        <a class="list-group-item list-group-item-action"
+           href="https://www.103.ru" target="_blank" rel="noopener">
+          Справочная служба 103.ru</a>
+        <a class="list-group-item list-group-item-action"
+           href="https://ru.wikipedia.org/wiki/Обнинск" target="_blank" rel="noopener">
+          Город Обнинск — справочная информация</a>
+        <a class="list-group-item list-group-item-action"
+           href="https://www.who.int/ru" target="_blank" rel="noopener">
+          Всемирная организация здравоохранения (ВОЗ)</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="alert alert-secondary mt-4">
+  Внешние ссылки открываются в новой вкладке. Поликлиника не несёт ответственности
+  за содержание сторонних сайтов.
+</div>
+
+{% endblock %}

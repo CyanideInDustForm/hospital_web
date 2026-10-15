@@ -1,0 +1,40 @@
+<!-- templates/site_search.html -->
+{% extends "base.html" %}
+{% block title %}Поиск по сайту · {{ org_name }}{% endblock %}
+{% block content %}
+
+<h1 class="h3 mb-3">Поиск по сайту</h1>
+
+<form method="get" action="{{ url_for('site_search') }}" class="d-flex gap-2 mb-4" role="search">
+  <input class="form-control" type="search" name="q" value="{{ q }}"
+         placeholder="Введите слова для поиска, например: врач расписание">
+  <button class="btn btn-accent" type="submit">Найти</button>
+</form>
+
+{% if q %}
+  <p class="text-muted">По запросу «<b>{{ q }}</b>» найдено страниц: <b>{{ results|length }}</b></p>
+
+  {% if results %}
+    {% for r in results %}
+    <div class="card shadow-sm mb-2">
+      <div class="card-body">
+        <a class="fw-semibold fs-5" href="{{ r.url }}">{{ r.title }}</a>
+        <div class="text-muted small mb-1">{{ r.url }}</div>
+        <p class="mb-0">{{ r.snippet }}</p>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="alert alert-secondary">
+      Ничего не найдено. Попробуйте другие слова, например:
+      «врач», «приём», «расписание», «вакцинация», «контакты».
+    </div>
+  {% endif %}
+{% else %}
+  <div class="alert alert-info">
+    Введите одно или несколько слов — будут показаны страницы сайта,
+    в тексте которых встречаются все введённые слова.
+  </div>
+{% endif %}
+
+{% endblock %}

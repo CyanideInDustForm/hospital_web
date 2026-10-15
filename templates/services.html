@@ -1,0 +1,120 @@
+<!-- templates/services.html -->
+{% extends "base.html" %}
+{% block title %}Сервисы · {{ org_name }}{% endblock %}
+{% block content %}
+
+<h1 class="h3 mb-3">Сервисы сайта</h1>
+<p class="text-muted">
+  Сервисы доступны всем посетителям. Данные погоды и валют загружаются
+  в браузере из открытых источников (open-meteo.com, open.er-api.com).
+</p>
+
+<div class="row g-4">
+  <!-- Виджет погоды -->
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">🌤 Погода в Обнинске</div>
+      <div class="card-body" id="weatherWidget">
+        <div class="text-muted">Загрузка прогноза…</div>
+      </div>
+      <div class="card-footer small text-muted">Источник: open-meteo.com</div>
+    </div>
+  </div>
+
+  <!-- Виджет курсов валют -->
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">💱 Курсы валют (к рублю)</div>
+      <div class="card-body" id="currencyWidget">
+        <div class="text-muted">Загрузка курсов…</div>
+      </div>
+      <div class="card-footer small text-muted">Источник: open.er-api.com</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mt-1">
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">🏆 Топ страниц сайта</div>
+      <div class="card-body">
+        <p>Рейтинг страниц по посещаемости — отдельный сервис на основе счётчика посещений.</p>
+        <a class="btn btn-accent" href="{{ url_for('top') }}">Открыть топ страниц</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">🔎 Поиск по сайту</div>
+      <div class="card-body">
+        <p>Поисковая система по страницам сайта — строка поиска расположена под верхним меню.</p>
+        <a class="btn btn-accent" href="{{ url_for('site_search') }}">Перейти к поиску</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// --- Виджет погоды (open-meteo, без ключа) ---
+(function () {
+  var el = document.getElementById('weatherWidget');
+  var url = 'https://api.open-meteo.com/v1/forecast'
+    + '?latitude=55.0968&longitude=36.6127'
+    + '&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code'
+    + '&timezone=Europe%2FMoscow';
+
+  fetch(url)
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      var c = data.current;
+      var codes = {
+        0: 'Ясно', 1: 'Преимущественно ясно', 2: 'Переменная облачность', 3: 'Пасмурно',
+        45: 'Туман', 48: 'Туман с изморозью',
+        51: 'Лёгкая морось', 53: 'Морось', 55: 'Сильная морось',
+        61: 'Небольшой дождь', 63: 'Дождь', 65: 'Сильный дождь',
+        71: 'Небольшой снег', 73: 'Снег', 75: 'Сильный снег',
+        80: 'Ливень', 95: 'Гроза'
+      };
+      var desc = codes[c.weather_code] || ('Код погоды ' + c.weather_code);
+      el.innerHTML =
+        '<div class="display-6 fw-bold">' + c.temperature_2m.toFixed(1) + ' °C</div>' +
+        '<div class="fs-5">' + desc + '</div>' +
+        '<div class="text-muted mt-2">Влажность: ' + c.relative_humidity_2m + ' %<br>' +
+        'Ветер: ' + c.wind_speed_10m.toFixed(1) + ' м/с</div>';
+    })
+    .catch(function () {
+      el.innerHTML = '<div class="text-muted">Не удалось загрузить прогноз погоды ' +
+        '(проверьте подключение к интернету).</div>';
+    });
+})();
+
+// --- Виджет курсов валют (open.er-api.com, без ключа) ---
+(function () {
+  var el = document.getElementById('currencyWidget');
+  fetch('https://open.er-api.com/v6/latest/USD')
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.result !== 'success') { throw new Error('bad result'); }
+      var rub = data.rates.RUB;
+      var rows = [
+        ['USD', 1], ['EUR', data.rates.EUR], ['CNY', data.rates.CNY], ['KZT', data.rates.KZT]
+      ];
+      var html = '<table class="table table-sm mb-0"><thead><tr><th>Валюта</th>' +
+                 '<th class="text-end">Курс, ₽</th></tr></thead><tbody>';
+      rows.forEach(function (pair) {
+        html += '<tr><td>' + pair[0] + '</td><td class="text-end">' +
+                (rub / pair[1]).toFixed(2) + '</td></tr>';
+      });
+      html += '</tbody></table>';
+      el.innerHTML = html;
+    })
+    .catch(function () {
+      el.innerHTML = '<div class="text-muted">Не удалось загрузить курсы валют ' +
+        '(проверьте подключение к интернету).</div>';
+    });
+})();
+</script>
+{% endblock %}

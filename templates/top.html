@@ -1,0 +1,40 @@
+<!-- templates/top.html -->
+{% extends "base.html" %}
+{% block title %}Топ страниц · {{ org_name }}{% endblock %}
+{% block content %}
+
+<h1 class="h3 mb-3">Топ страниц сайта</h1>
+<p class="text-muted">
+  Рейтинг строится по данным счётчика посещений: каждый заход или обновление
+  страницы засчитывается как одно посещение. Всего посещений: <b>{{ total }}</b>.
+</p>
+
+<div class="card shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-striped align-middle mb-0">
+      <thead class="table-primary">
+        <tr>
+          <th style="width:70px">Место</th>
+          <th>Страница</th>
+          <th class="text-end" style="width:160px">Посещений</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in table %}
+        <tr>
+          <td>
+            {% if r.rank == 1 %}🥇{% elif r.rank == 2 %}🥈{% elif r.rank == 3 %}🥉
+            {% else %}<b>{{ r.rank }}</b>{% endif %}
+          </td>
+          <td><a href="{{ r.url }}">{{ r.title }}</a></td>
+          <td class="text-end"><span class="badge text-bg-primary">{{ r.visits }}</span></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="text-muted p-3">Посещений пока не было.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

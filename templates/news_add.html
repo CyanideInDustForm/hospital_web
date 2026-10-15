@@ -1,0 +1,28 @@
+<!-- templates/news_add.html -->
+{% extends "base.html" %}
+{% block title %}Добавить новость · {{ org_name }}{% endblock %}
+{% block content %}
+
+<h1 class="h3 mb-3">Добавить новость</h1>
+<p class="text-muted">Новость будет сохранена в базе данных сайта (таблица <code>news</code>).</p>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <form method="post" action="{{ url_for('news_add') }}" class="needs-validation" novalidate>
+      <div class="mb-3">
+        <label class="form-label">Заголовок</label>
+        <input class="form-control" name="title" minlength="5" maxlength="120" required>
+        <div class="invalid-feedback">Заголовок: 5–120 символов.</div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Текст новости</label>
+        <textarea class="form-control" name="body" rows="6" minlength="10" maxlength="4000" required></textarea>
+        <div class="invalid-feedback">Текст: 10–4000 символов.</div>
+      </div>
+      <button class="btn btn-accent" type="submit">Опубликовать</button>
+      <a class="btn btn-outline-secondary" href="{{ url_for('news') }}">Отмена</a>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,64 @@
+<!-- templates/achievements.html -->
+{% extends "base.html" %}
+{% block title %}Достижения · {{ org_name }}{% endblock %}
+{% block content %}
+
+<h1 class="h3 mb-3">Достижения поликлиники</h1>
+
+<div class="row g-4">
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">Профессиональные достижения</div>
+      <div class="card-body">
+        <ul class="mb-0">
+          <li>5 врачей имеют высшую категорию, 2 — кандидатов медицинских наук;</li>
+          <li>призовые места в городском конкурсе качества медицинских услуг;</li>
+          <li>грамота министерства здравоохранения за высокие показатели
+              профилактической работы.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">Внедрённые технологии</div>
+      <div class="card-body">
+        <ul class="mb-0">
+          <li>электронная запись на приём через сайт;</li>
+          <li>электронная медицинская карта пациента;</li>
+          <li>телемедицинские консультации специалистов;</li>
+          <li>современный гематологический анализатор в лаборатории.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2 class="h5 mt-4 mb-3">Показатели работы за последний год</h2>
+<table class="table table-striped shadow-sm">
+  <thead class="table-primary">
+    <tr>
+      <th>Показатель</th>
+      <th class="text-end">Значение</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>Принято пациентов (приёмов)</td><td class="text-end">48 250</td></tr>
+    <tr><td>Выполнено профилактических осмотров</td><td class="text-end">7 340</td></tr>
+    <tr><td>Лабораторных исследований</td><td class="text-end">31 900</td></tr>
+    <tr><td>Вакцинация, % от плана</td><td class="text-end">100</td></tr>
+    <tr><td>Благодарностей от пациентов</td><td class="text-end">214</td></tr>
+  </tbody>
+</table>
+
+<h2 class="h5 mt-4 mb-3">Отзывы пациентов</h2>
+<blockquote class="blockquote border-start border-3 border-primary ps-3">
+  <p class="mb-1">«Записался на приём через сайт за две минуты — очень удобно!»</p>
+  <footer class="blockquote-footer">Андрей С., пациент терапевтического отделения</footer>
+</blockquote>
+<blockquote class="blockquote border-start border-3 border-primary ps-3">
+  <p class="mb-1">«Внимательные врачи и современная лаборатория. Всё быстро и без очередей.»</p>
+  <footer class="blockquote-footer">Марина В., мама пациента педиатрического отделения</footer>
+</blockquote>
+
+{% endblock %}

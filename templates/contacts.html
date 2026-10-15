@@ -1,0 +1,93 @@
+<!-- templates/contacts.html -->
+{% extends "base.html" %}
+{% block title %}Контакты · {{ org_name }}{% endblock %}
+{% block content %}
+
+<h1 class="h3 mb-3">Контактные данные</h1>
+
+<div class="row g-4">
+  <div class="col-md-5">
+    <div class="card shadow-sm mb-3">
+      <div class="card-header bg-white fw-semibold">Как нас найти</div>
+      <div class="card-body">
+        <p class="mb-1"><b>Адрес:</b> г. Обнинск, ул. Курчатова, д. 1</p>
+        <p class="mb-1"><b>Телефон регистратуры:</b>
+          <a href="tel:+74843921111">+7 (48439) 2-11-11</a></p>
+        <p class="mb-1"><b>Email:</b> <a href="mailto:info@polik5.ru">info@polik5.ru</a></p>
+        <p class="mb-0"><b>Транспорт:</b> автобусы 1, 4, 11 до остановки «Поликлиника».</p>
+      </div>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-header bg-white fw-semibold">Сервис «Карта»</div>
+      <div class="card-body">
+        <p class="small mb-2">
+          На карте отмечено расположение поликлиники.
+          Нажмите кнопку ниже, чтобы отметить <b>ваше местоположение</b> —
+          браузер запросит разрешение на геолокацию.
+        </p>
+        <button id="geoBtn" class="btn btn-accent btn-sm">📍 Отметить моё местоположение</button>
+        <div id="geoStatus" class="small text-muted mt-2"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-7">
+    <div class="card shadow-sm">
+      <div id="map" style="height: 420px;"></div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// --- Сервис «Карта» с геолокацией (Leaflet + OpenStreetMap) ---
+(function () {
+  var clinicLat = 55.0968, clinicLon = 36.6127; // г. Обнинск, ул. Курчатова, 1
+
+  var map = L.map('map').setView([clinicLat, clinicLon], 15);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(map);
+
+  var clinicMarker = L.marker([clinicLat, clinicLon]).addTo(map)
+    .bindPopup('<b>{{ org_name }}</b><br>г. Обнинск, ул. Курчатова, д. 1')
+    .openPopup();
+
+  var userMarker = null;
+
+  document.getElementById('geoBtn').addEventListener('click', function () {
+    var status = document.getElementById('geoStatus');
+    if (!navigator.geolocation) {
+      status.textContent = 'Геолокация не поддерживается вашим браузером.';
+      return;
+    }
+    status.textContent = 'Определение местоположения…';
+    navigator.geolocation.getCurrentPosition(
+      function (pos) {
+        var lat = pos.coords.latitude, lon = pos.coords.longitude;
+        if (userMarker) { map.removeLayer(userMarker); }
+        userMarker = L.marker([lat, lon], {
+            icon: L.icon({
+              iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+              shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+              iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+            })
+          }).addTo(map)
+          .bindPopup('<b>Вы здесь</b><br>широта: ' + lat.toFixed(5) + '<br>долгота: ' + lon.toFixed(5))
+          .openPopup();
+        map.fitBounds([[clinicLat, clinicLon], [lat, lon]], { padding: [50, 50] });
+        status.textContent = 'Ваше местоположение отмечено на карте.';
+      },
+      function (err) {
+        status.textContent = 'Не удалось определить местоположение: ' + err.message;
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  });
+})();
+</script>
+{% endblock %}
