@@ -1,0 +1,49 @@
+<!-- templates/department.html — отделение клиники -->
+{% extends "base.html" %}
+{% block title %}{{ dept.title }} · {{ org_name }}{% endblock %}
+{% block content %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('home') }}">Главная</a></li>
+    <li class="breadcrumb-item active">{{ dept.title }}</li>
+  </ol>
+</nav>
+
+<h1 class="h3 mb-3">{{ dept.title }}</h1>
+<p class="lead">{{ dept.description }}</p>
+
+<div class="alert alert-info">
+  Режим работы отделения: <b>{{ dept.schedule }}</b>.
+  Запись на приём — через <a href="{{ url_for('app_home') }}" class="alert-link">приложение к БД</a>
+  или по телефону регистратуры.
+</div>
+
+<h2 class="h5 mb-3">Врачи отделения</h2>
+<div class="row g-3">
+  {% for d in doctors %}
+  <div class="col-md-6 col-lg-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <span class="avatar-circle">{{ d.name[0] }}</span>
+          <div>
+            <div class="fw-semibold">{{ d.name }}</div>
+            <div class="small text-muted">{{ d.specialty }}</div>
+          </div>
+        </div>
+        <div class="small">
+          <div>Стаж: <b>{{ d.experience }}</b></div>
+          <div>{{ d.category }}{% if d.degree %} · {{ d.degree }}{% endif %}</div>
+          <div>Кабинет: {{ d.cabinet }} · {{ d.phone }}</div>
+        </div>
+      </div>
+      <div class="card-footer bg-white">
+        <a class="btn btn-sm btn-outline-accent" href="{{ url_for('reviews') }}">Отзывы о враче</a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% endblock %}

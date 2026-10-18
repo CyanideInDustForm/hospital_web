@@ -3,17 +3,16 @@
 {% block title %}Сервисы · {{ org_name }}{% endblock %}
 {% block content %}
 
-<h1 class="h3 mb-3">Сервисы сайта</h1>
+<h1 class="h3 mb-3">Сервисы сайта (10)</h1>
 <p class="text-muted">
-  Сервисы доступны всем посетителям. Данные погоды и валют загружаются
-  в браузере из открытых источников (open-meteo.com, open.er-api.com).
+  На сайте работают десять самостоятельных сервисов — каждый можно быстро
+  подключить к любому другому сайту.
 </p>
 
-<div class="row g-4">
-  <!-- Виджет погоды -->
+<div class="row g-3">
   <div class="col-md-6">
     <div class="card shadow-sm h-100">
-      <div class="card-header bg-white fw-semibold">🌤 Погода в Обнинске</div>
+      <div class="card-header bg-white fw-semibold">🌤 1. Погода в Обнинске</div>
       <div class="card-body" id="weatherWidget">
         <div class="text-muted">Загрузка прогноза…</div>
       </div>
@@ -21,34 +20,96 @@
     </div>
   </div>
 
-  <!-- Виджет курсов валют -->
   <div class="col-md-6">
     <div class="card shadow-sm h-100">
-      <div class="card-header bg-white fw-semibold">💱 Курсы валют (к рублю)</div>
+      <div class="card-header bg-white fw-semibold">💱 2. Курсы валют (к рублю)</div>
       <div class="card-body" id="currencyWidget">
         <div class="text-muted">Загрузка курсов…</div>
       </div>
       <div class="card-footer small text-muted">Источник: open.er-api.com</div>
     </div>
   </div>
-</div>
 
-<div class="row g-4 mt-1">
   <div class="col-md-6">
     <div class="card shadow-sm h-100">
-      <div class="card-header bg-white fw-semibold">🏆 Топ страниц сайта</div>
+      <div class="card-header bg-white fw-semibold">🔎 3. Поиск по сайту</div>
       <div class="card-body">
-        <p>Рейтинг страниц по посещаемости — отдельный сервис на основе счётчика посещений.</p>
+        <p>Поисковая система по страницам сайта. Строка поиска — под верхним меню на каждой странице.</p>
+        <a class="btn btn-accent" href="{{ url_for('site_search') }}">Перейти к поиску</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">🏆 4. Топ страниц сайта</div>
+      <div class="card-body">
+        <p>Рейтинг страниц по посещаемости на основе счётчика посещений.</p>
         <a class="btn btn-accent" href="{{ url_for('top') }}">Открыть топ страниц</a>
       </div>
     </div>
   </div>
+
   <div class="col-md-6">
     <div class="card shadow-sm h-100">
-      <div class="card-header bg-white fw-semibold">🔎 Поиск по сайту</div>
+      <div class="card-header bg-white fw-semibold">🗺 5. Карта с геолокацией</div>
       <div class="card-body">
-        <p>Поисковая система по страницам сайта — строка поиска расположена под верхним меню.</p>
-        <a class="btn btn-accent" href="{{ url_for('site_search') }}">Перейти к поиску</a>
+        <p>Карта проезда с отметкой поликлиники и возможностью показать ваше местоположение.</p>
+        <a class="btn btn-accent" href="{{ url_for('contacts') }}">Открыть карту</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">📝 6. Регистрация</div>
+      <div class="card-body">
+        <p>Учётная запись пациента. После регистрации вы появляетесь в базе пациентов клиники.</p>
+        <a class="btn btn-accent" href="{{ url_for('register') }}">Зарегистрироваться</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">🔐 7. Вход / личный кабинет</div>
+      <div class="card-body">
+        <p>Вход по логину и паролю. Открывает доступ к отзывам о врачах.</p>
+        {% if current_user %}
+          <span class="text-success">Вы вошли как {{ current_user.full_name }}</span>
+        {% else %}
+          <a class="btn btn-accent" href="{{ url_for('login') }}">Войти</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">⭐ 8. Отзывы и рейтинг врачей</div>
+      <div class="card-body">
+        <p>Оценки от 1 до 5 звёзд и отзывы о врачах, средний рейтинг каждого специалиста.</p>
+        <a class="btn btn-accent" href="{{ url_for('reviews') }}">Открыть отзывы</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">📖 9. Гостевая книга</div>
+      <div class="card-body">
+        <p>Сообщения и пожелания посетителей сайта, хранятся в базе данных.</p>
+        <a class="btn btn-accent" href="{{ url_for('guestbook') }}">Открыть гостевую книгу</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">⚖️ 10. Калькулятор ИМТ</div>
+      <div class="card-body">
+        <p>Интерактивный расчёт индекса массы тела по росту и весу.</p>
+        <a class="btn btn-accent" href="{{ url_for('bmi') }}">Открыть калькулятор</a>
       </div>
     </div>
   </div>
@@ -61,6 +122,7 @@
 // --- Виджет погоды (open-meteo, без ключа) ---
 (function () {
   var el = document.getElementById('weatherWidget');
+  if (!el) return;
   var url = 'https://api.open-meteo.com/v1/forecast'
     + '?latitude=55.0968&longitude=36.6127'
     + '&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code'
@@ -94,6 +156,7 @@
 // --- Виджет курсов валют (open.er-api.com, без ключа) ---
 (function () {
   var el = document.getElementById('currencyWidget');
+  if (!el) return;
   fetch('https://open.er-api.com/v6/latest/USD')
     .then(function (r) { return r.json(); })
     .then(function (data) {

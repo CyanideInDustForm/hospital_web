@@ -11,16 +11,21 @@
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 import xml.etree.ElementTree as ET
 import xml.dom.minidom
 from datetime import datetime, date
+from functools import wraps
 from typing import Any, Dict, List, Optional, Tuple
 
 from flask import (
     Flask, g, render_template, request, redirect, url_for,
     session, flash, jsonify, Response
 )
+from werkzeug.security import generate_password_hash, check_password_hash
+
+from departments import DEPARTMENTS, DEPARTMENT_MAP, department_doctors
 
 APP_ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -130,6 +135,111 @@ SITE_PAGES: Dict[str, Dict[str, str]] = {
                  "врачи, записи. Поиск по двум таблицам: приёмы пациента. Агрегация: "
                  "количество приёмов по каждому врачу."),
     },
+    # ---------- Раздел «Клиника» ----------
+    "clinic_therapy": {
+        "title": "Терапевтическое отделение",
+        "url": "/clinic/therapy",
+        "text": ("Терапевтическое отделение: участковые терапевты и пульмонолог. "
+                 "Приём взрослых пациентов, лечение острых и хронических заболеваний, "
+                 "справки, направления к узким специалистам. Врачи, стаж, категория, "
+                 "кабинеты, расписание приёма."),
+    },
+    "clinic_pediatrics": {
+        "title": "Педиатрическое отделение",
+        "url": "/clinic/pediatrics",
+        "text": ("Педиатрическое отделение: приём детей с рождения до 18 лет. "
+                 "Педиатры, вакцинация, профилактические осмотры, кабинет здорового "
+                 "ребёнка. Врачи, стаж, расписание."),
+    },
+    "clinic_surgery": {
+        "title": "Хирургическое отделение",
+        "url": "/clinic/surgery",
+        "text": ("Хирургическое отделение: хирург и ортопед. Малая хирургия, травмы, "
+                 "заболевания опорно-двигательного аппарата, гипсы. Врачи, стаж, "
+                 "кабинеты, расписание приёма."),
+    },
+    "clinic_cardiology": {
+        "title": "Кардиологическое отделение",
+        "url": "/clinic/cardiology",
+        "text": ("Кардиологическое отделение: лечение гипертонии, ишемической болезни "
+                 "сердца, аритмий. ЭКГ, суточное мониторирование давления и пульса. "
+                 "Кардиологи, стаж, расписание."),
+    },
+    "clinic_neurology": {
+        "title": "Неврологическое отделение",
+        "url": "/clinic/neurology",
+        "text": ("Неврологическое отделение: головные боли, головокружения, боли в спине, "
+                 "невриты, последствия инсультов. Рефлексотерапия. Неврологи, стаж, "
+                 "расписание приёма."),
+    },
+    "clinic_misc": {
+        "title": "Прочие специалисты",
+        "url": "/clinic/misc",
+        "text": ("Окулист — проверка зрения и подбор очков. Дерматолог — заболевания "
+                 "кожи. Уролог. Приём узких специалистов по направлению терапевта."),
+    },
+    "clinic_oms": {
+        "title": "Приём по ОМС",
+        "url": "/clinic/oms",
+        "text": ("Приём по полису ОМС бесплатно: консультации специалистов, анализы, "
+                 "инструментальная диагностика, диспансеризация. Программа государственных "
+                 "гарантий. Какие документы нужны: паспорт, полис ОМС, СНИЛС."),
+    },
+    "clinic_dms": {
+        "title": "Приём по ДМС",
+        "url": "/clinic/dms",
+        "text": ("Приём по полису добровольного медицинского страхования ДМС. "
+                 "Партнёрские страховые компании, порядок обращения, необходимые "
+                 "документы, программы страхования."),
+    },
+    "clinic_patients": {
+        "title": "Информация для пациентов",
+        "url": "/clinic/patients",
+        "text": ("Информация для пациентов: как записаться на приём, правила подготовки "
+                 "к анализам, вызов врача на дом, дни приёма граждан, телефоны "
+                 "горячих линий, права и обязанности пациента."),
+    },
+    "clinic_lab": {
+        "title": "Сдать анализы",
+        "url": "/clinic/lab",
+        "text": ("Лабораторная диагностика: общий и биохимический анализ крови, анализ "
+                 "мочи, глюкоза, холестерин. Правила подготовки к сдаче анализов, "
+                 "время приёма биоматериала, как получить результат."),
+    },
+    # ---------- Сервисы ----------
+    "register": {
+        "title": "Регистрация",
+        "url": "/register",
+        "text": ("Регистрация на сайте. Учётная запись пациента: логин, пароль, ФИО, "
+                 "телефон, дата рождения. Зарегистрированный пользователь добавляется "
+                 "в базу данных пациентов и может записываться на приём."),
+    },
+    "login": {
+        "title": "Вход",
+        "url": "/login",
+        "text": ("Вход в личный кабинет. Авторизация по логину и паролю. Вход "
+                 "необходим для сервисов отзывов о врачах."),
+    },
+    "reviews": {
+        "title": "Отзывы и рейтинг врачей",
+        "url": "/reviews",
+        "text": ("Отзывы и рейтинг врачей. Оценка от одной до пяти звёзд, текст отзыва. "
+                 "Средний рейтинг каждого врача. Добавление отзыва доступно "
+                 "зарегистрированным пользователям."),
+    },
+    "guestbook": {
+        "title": "Гостевая книга",
+        "url": "/guestbook",
+        "text": ("Гостевая книга сайта. Оставьте сообщение, пожелание или вопрос. "
+                 "Сообщения хранятся в базе данных и показываются всем посетителям."),
+    },
+    "bmi": {
+        "title": "Калькулятор ИМТ",
+        "url": "/bmi",
+        "text": ("Калькулятор индекса массы тела. Введите рост и вес — сервис вычислит "
+                 "ИМТ и покажет категорию: недостаточная масса, норма, избыточная масса, "
+                 "ожирение."),
+    },
 }
 
 
@@ -226,7 +336,19 @@ def create_app() -> Flask:
         "home", "about", "achievements", "news", "news_add",
         "contacts", "links", "services", "top", "site_search",
         "xml_info", "app_home", "db_search", "admin",
+        # раздел «Клиника»
+        "clinic_department", "clinic_oms", "clinic_dms",
+        "clinic_patients", "clinic_lab",
+        # сервисы
+        "register", "login", "reviews", "guestbook", "bmi",
     }
+
+    def page_key_for(endpoint: str) -> str:
+        """Ключ страницы для счётчика/топа. Отделения клиники — отдельные ключи."""
+        if endpoint == "clinic_department":
+            dept = (request.view_args or {}).get("dept_key", "")
+            return f"clinic_{dept}"
+        return endpoint
 
     @app.before_request
     def track_visit() -> None:
@@ -234,7 +356,7 @@ def create_app() -> Flask:
             sdb = get_site_db()
             sdb.execute(
                 "INSERT INTO page_visits(page_key) VALUES (?);",
-                (request.endpoint,),
+                (page_key_for(request.endpoint),),
             )
             sdb.commit()
 
@@ -246,18 +368,41 @@ def create_app() -> Flask:
         return int(row["c"]) if row else 0
 
     # ------------------------------------------------------------------
+    # Текущий пользователь (регистрация/вход)
+    # ------------------------------------------------------------------
+    def current_user() -> Optional[sqlite3.Row]:
+        uid = session.get("user_id")
+        if not uid:
+            return None
+        return get_site_db().execute(
+            "SELECT * FROM users WHERE id = ?;", (uid,)
+        ).fetchone()
+
+    def login_required(view):
+        @wraps(view)
+        def wrapped(*args, **kwargs):
+            if not session.get("user_id"):
+                flash("Войдите на сайт, чтобы воспользоваться этим сервисом.", "warning")
+                return redirect(url_for("login", next=request.path))
+            return view(*args, **kwargs)
+        return wrapped
+
+    # ------------------------------------------------------------------
     # Глобальные переменные шаблонов
     # ------------------------------------------------------------------
     @app.context_processor
     def inject_globals():
-        current_key = request.endpoint or ""
+        current_key = page_key_for(request.endpoint or "")
+        tracked = (request.endpoint or "") in TRACKED_ENDPOINTS
         return {
             "active_db_key": session.get("db_key", "A"),
             "org_name": ORG_NAME,
             "today": date.today().isoformat(),
             "current_year": date.today().year,
             "current_page_key": current_key,
-            "current_page_visits": visits_count(current_key) if current_key in TRACKED_ENDPOINTS else None,
+            "current_page_visits": visits_count(current_key) if tracked else None,
+            "current_user": current_user(),
+            "departments": DEPARTMENTS,
             "now_local_dt": datetime.now().strftime("%Y-%m-%dT%H:%M"),
             "min_visit_dt": (datetime.now().replace(second=0, microsecond=0)
                              .replace(year=datetime.now().year - 5)).strftime("%Y-%m-%dT%H:%M"),
@@ -956,6 +1101,231 @@ def create_app() -> Flask:
             return jsonify({"ok": True})
         except Exception as e:
             return jsonify({"ok": False, "error": str(e)})
+
+    # ==================================================================
+    #  РАЗДЕЛ «КЛИНИКА» — отделения и врачи (на основе seed.py)
+    # ==================================================================
+
+    @app.get("/clinic/<dept_key>")
+    def clinic_department(dept_key: str):
+        dept = DEPARTMENT_MAP.get(dept_key)
+        if dept is None:
+            flash("Такого отделения нет.", "warning")
+            return redirect(url_for("home"))
+        doctors = department_doctors(list(dept["specialties"]))
+        return render_template("department.html", dept=dept, doctors=doctors)
+
+    @app.get("/clinic/oms")
+    def clinic_oms():
+        return render_template("clinic_oms.html")
+
+    @app.get("/clinic/dms")
+    def clinic_dms():
+        return render_template("clinic_dms.html")
+
+    @app.get("/clinic/patients")
+    def clinic_patients():
+        return render_template("clinic_patients.html")
+
+    @app.get("/clinic/lab")
+    def clinic_lab():
+        return render_template("clinic_lab.html")
+
+    # ==================================================================
+    #  СЕРВИС: РЕГИСТРАЦИЯ / ВХОД / ВЫХОД
+    #  Пользователь сохраняется в БД сайта (users) и автоматически
+    #  добавляется в базу пациентов клиники (patients).
+    # ==================================================================
+
+    USERNAME_RE = re.compile(r"^[A-Za-zА-Яа-я0-9_]{3,20}$")
+
+    @app.route("/register", methods=["GET", "POST"])
+    def register():
+        if request.method == "POST":
+            username = (request.form.get("username") or "").strip()
+            password = request.form.get("password") or ""
+            password2 = request.form.get("password2") or ""
+            full_name = (request.form.get("full_name") or "").strip()
+            phone = (request.form.get("phone") or "").strip()
+            email = (request.form.get("email") or "").strip() or None
+            birth_date = (request.form.get("birth_date") or "").strip()
+
+            errors = []
+            if not USERNAME_RE.match(username):
+                errors.append("Логин: 3–20 символов (буквы, цифры, подчёркивание).")
+            if len(password) < 6:
+                errors.append("Пароль должен быть не короче 6 символов.")
+            if password != password2:
+                errors.append("Пароли не совпадают.")
+            if not (5 <= len(full_name) <= 30):
+                errors.append("ФИО: 5–30 символов.")
+            if not (10 <= len(phone) <= 15):
+                errors.append("Телефон: 10–15 символов.")
+            if not birth_date or birth_date < "1920-01-01" or birth_date > date.today().isoformat():
+                errors.append("Некорректная дата рождения.")
+
+            if errors:
+                for e in errors:
+                    flash(e, "danger")
+                return render_template("register.html", form=request.form), 400
+
+            sdb = get_site_db()
+            try:
+                cur = sdb.execute("""
+                    INSERT INTO users(username, pass_hash, full_name, email, phone, birth_date)
+                    VALUES (?, ?, ?, ?, ?, ?);
+                """, (username, generate_password_hash(password),
+                      full_name, email, phone, birth_date))
+                sdb.commit()
+            except sqlite3.IntegrityError:
+                flash("Пользователь с таким логином уже существует.", "danger")
+                return render_template("register.html", form=request.form), 400
+
+            # Пользователь добавляется в базу пациентов клиники —
+            # с ним можно работать в «Записи к врачу» и «Просмотре клиентов».
+            patient_added = True
+            try:
+                execute("""
+                    INSERT INTO patients(full_name, phone, email, birth_date)
+                    VALUES (?, ?, ?, ?);
+                """, (full_name, phone,
+                      email if (email and len(email) <= 20) else None, birth_date))
+            except sqlite3.IntegrityError:
+                patient_added = False
+
+            session["user_id"] = cur.lastrowid
+            flash(f"Регистрация успешна. Добро пожаловать, {full_name}!", "success")
+            if not patient_added:
+                flash("Внимание: не удалось добавить вас в базу пациентов "
+                      "(ограничения БД). Обратитесь в регистратуру.", "warning")
+            return redirect(url_for("home"))
+
+        return render_template("register.html", form={})
+
+    @app.route("/login", methods=["GET", "POST"])
+    def login():
+        if request.method == "POST":
+            username = (request.form.get("username") or "").strip()
+            password = request.form.get("password") or ""
+            user = get_site_db().execute(
+                "SELECT * FROM users WHERE username = ?;", (username,)
+            ).fetchone()
+
+            if user is None or not check_password_hash(user["pass_hash"], password):
+                flash("Неверный логин или пароль.", "danger")
+                return render_template("login.html"), 400
+
+            session["user_id"] = user["id"]
+            flash(f"Здравствуйте, {user['full_name']}!", "success")
+            next_url = request.args.get("next") or url_for("home")
+            return redirect(next_url)
+
+        return render_template("login.html")
+
+    @app.get("/logout")
+    def logout():
+        session.pop("user_id", None)
+        flash("Вы вышли из аккаунта.", "info")
+        return redirect(url_for("home"))
+
+    # ==================================================================
+    #  СЕРВИС: ОТЗЫВЫ И РЕЙТИНГ ВРАЧЕЙ
+    # ==================================================================
+
+    def doctor_ratings() -> Dict[str, Dict[str, Any]]:
+        """Средний рейтинг и число отзывов по каждому врачу (из БД сайта)."""
+        rows = get_site_db().execute("""
+            SELECT doctor_name,
+                   ROUND(AVG(rating), 1) AS avg_rating,
+                   COUNT(*) AS review_count
+            FROM reviews
+            GROUP BY doctor_name;
+        """).fetchall()
+        return {r["doctor_name"]: dict(r) for r in rows}
+
+    @app.route("/reviews", methods=["GET", "POST"])
+    def reviews():
+        sdb = get_site_db()
+
+        if request.method == "POST":
+            if not session.get("user_id"):
+                flash("Войдите на сайт, чтобы оставить отзыв.", "warning")
+                return redirect(url_for("login", next=request.path))
+
+            doctor_name = (request.form.get("doctor_name") or "").strip()
+            text = (request.form.get("text") or "").strip()
+            try:
+                rating = int(request.form.get("rating") or 0)
+            except ValueError:
+                rating = 0
+
+            # врач должен существовать в активной базе клиники
+            doc = get_db().execute(
+                "SELECT full_name, specialty FROM doctors WHERE full_name = ?;",
+                (doctor_name,),
+            ).fetchone()
+
+            if doc is None:
+                flash("Выберите врача из списка.", "danger")
+            elif not (1 <= rating <= 5):
+                flash("Оценка должна быть от 1 до 5.", "danger")
+            elif not (10 <= len(text) <= 500):
+                flash("Текст отзыва: 10–500 символов.", "danger")
+            else:
+                sdb.execute("""
+                    INSERT INTO reviews(doctor_name, doctor_specialty, author_name, rating, text)
+                    VALUES (?, ?, ?, ?, ?);
+                """, (doc["full_name"], doc["specialty"],
+                      current_user()["full_name"], rating, text))
+                sdb.commit()
+                flash("Спасибо! Ваш отзыв опубликован.", "success")
+                return redirect(url_for("reviews"))
+
+        doctors = query_all(
+            "SELECT full_name, specialty, cabinet FROM doctors ORDER BY full_name;"
+        )
+        ratings = doctor_ratings()
+        all_reviews = sdb.execute(
+            "SELECT * FROM reviews ORDER BY created_at DESC, id DESC LIMIT 100;"
+        ).fetchall()
+        return render_template("reviews.html", doctors=doctors,
+                               ratings=ratings, reviews=all_reviews)
+
+    # ==================================================================
+    #  СЕРВИС: ГОСТЕВАЯ КНИГА
+    # ==================================================================
+
+    @app.route("/guestbook", methods=["GET", "POST"])
+    def guestbook():
+        sdb = get_site_db()
+        if request.method == "POST":
+            author = (request.form.get("author_name") or "").strip()
+            message = (request.form.get("message") or "").strip()
+            if not (2 <= len(author) <= 30):
+                flash("Имя: 2–30 символов.", "danger")
+            elif not (3 <= len(message) <= 500):
+                flash("Сообщение: 3–500 символов.", "danger")
+            else:
+                sdb.execute(
+                    "INSERT INTO guestbook(author_name, message) VALUES (?, ?);",
+                    (author, message),
+                )
+                sdb.commit()
+                flash("Сообщение добавлено в гостевую книгу.", "success")
+                return redirect(url_for("guestbook"))
+
+        messages = sdb.execute(
+            "SELECT * FROM guestbook ORDER BY created_at DESC, id DESC LIMIT 100;"
+        ).fetchall()
+        return render_template("guestbook.html", messages=messages)
+
+    # ==================================================================
+    #  СЕРВИС: КАЛЬКУЛЯТОР ИМТ
+    # ==================================================================
+
+    @app.get("/bmi")
+    def bmi():
+        return render_template("bmi.html")
 
     return app
 

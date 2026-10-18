@@ -63,6 +63,22 @@
         <li class="nav-item">
           <a class="nav-link {{ 'active' if current_page_key == 'achievements' }}" href="{{ url_for('achievements') }}">Достижения</a>
         </li>
+
+        <!-- Раздел «Клиника» -->
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle {{ 'active' if current_page_key.startswith('clinic_') }}"
+             href="#" role="button" data-bs-toggle="dropdown">Клиника</a>
+          <ul class="dropdown-menu">
+            {% for d in departments %}
+            <li><a class="dropdown-item" href="{{ url_for('clinic_department', dept_key=d.key) }}">{{ d.title }}</a></li>
+            {% endfor %}
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="{{ url_for('clinic_oms') }}">Приём по ОМС</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('clinic_dms') }}">Приём по ДМС</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('clinic_patients') }}">Информация для пациентов</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('clinic_lab') }}">Сдать анализы</a></li>
+          </ul>
+        </li>
         <li class="nav-item">
           <a class="nav-link {{ 'active' if current_page_key == 'contacts' }}" href="{{ url_for('contacts') }}">Контакты</a>
         </li>
@@ -72,13 +88,17 @@
 
         <!-- Сервисы сайта -->
         <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle {{ 'active' if current_page_key in ['services', 'top'] }}"
+          <a class="nav-link dropdown-toggle {{ 'active' if current_page_key in ['services', 'top', 'reviews', 'guestbook', 'bmi'] }}"
              href="#" role="button" data-bs-toggle="dropdown">Сервисы</a>
           <ul class="dropdown-menu">
             <li><a class="dropdown-item" href="{{ url_for('services') }}">Погода и курсы валют</a></li>
             <li><a class="dropdown-item" href="{{ url_for('top') }}">Топ страниц сайта</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('reviews') }}">Отзывы и рейтинг врачей</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('guestbook') }}">Гостевая книга</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('bmi') }}">Калькулятор ИМТ</a></li>
             <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item" href="{{ url_for('site_search') }}">Поиск по сайту</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('register') }}">Регистрация</a></li>
           </ul>
         </li>
 
@@ -103,6 +123,17 @@
            href="{{ url_for('switch_db', db_key='A', next=request.full_path) }}">Access</a>
         <a class="btn btn-sm {{ 'btn-accent' if active_db_key=='B' else 'btn-outline-accent' }}"
            href="{{ url_for('switch_db', db_key='B', next=request.full_path) }}">Postgres</a>
+      </div>
+
+      <!-- Вход / регистрация -->
+      <div class="d-flex gap-2 align-items-center ms-lg-2 mt-2 mt-lg-0">
+        {% if current_user %}
+          <span class="small" style="color:#cfe2ff">👤 {{ current_user.full_name }}</span>
+          <a class="btn btn-sm btn-outline-accent" href="{{ url_for('logout') }}">Выход</a>
+        {% else %}
+          <a class="btn btn-sm btn-outline-accent" href="{{ url_for('login') }}">Вход</a>
+          <a class="btn btn-sm btn-accent" href="{{ url_for('register') }}">Регистрация</a>
+        {% endif %}
       </div>
     </div>
   </div>

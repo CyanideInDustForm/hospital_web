@@ -1,0 +1,46 @@
+<!-- templates/guestbook.html — сервис гостевая книга -->
+{% extends "base.html" %}
+{% block title %}Гостевая книга · {{ org_name }}{% endblock %}
+{% block content %}
+
+<h1 class="h3 mb-3">Гостевая книга</h1>
+<p class="text-muted">Оставьте сообщение, пожелание или вопрос. Сообщения хранятся в базе данных сайта.</p>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <form method="post" action="{{ url_for('guestbook') }}">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label">Ваше имя</label>
+          <input class="form-control" name="author_name" required minlength="2" maxlength="30"
+                 value="{{ current_user.full_name if current_user else '' }}">
+        </div>
+        <div class="col-md-8">
+          <label class="form-label">Сообщение</label>
+          <input class="form-control" name="message" required minlength="3" maxlength="500"
+                 placeholder="Напишите сообщение (3–500 символов)">
+        </div>
+      </div>
+      <button class="btn btn-accent mt-3" type="submit">Отправить</button>
+    </form>
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-header bg-white fw-semibold">Сообщения</div>
+  <div class="card-body">
+    {% for m in messages %}
+    <div class="border-bottom pb-2 mb-2">
+      <div class="d-flex justify-content-between">
+        <b>{{ m.author_name }}</b>
+        <span class="text-muted small">{{ m.created_at }}</span>
+      </div>
+      <p class="mb-0">{{ m.message }}</p>
+    </div>
+    {% else %}
+    <div class="text-muted">Сообщений пока нет.</div>
+    {% endfor %}
+  </div>
+</div>
+
+{% endblock %}

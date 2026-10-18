@@ -1,0 +1,107 @@
+<!-- templates/reviews.html — сервис отзывов и рейтинга врачей -->
+{% extends "base.html" %}
+{% block title %}Отзывы и рейтинг врачей · {{ org_name }}{% endblock %}
+{% block content %}
+
+<h1 class="h3 mb-3">Отзывы и рейтинг врачей</h1>
+
+<!-- Форма отзыва -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white fw-semibold">Оставить отзыв</div>
+  <div class="card-body">
+    {% if current_user %}
+    <form method="post" action="{{ url_for('reviews') }}">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Врач</label>
+          <select class="form-select" name="doctor_name" required>
+            <option value="" selected disabled>Выберите врача…</option>
+            {% for d in doctors %}
+            <option value="{{ d.full_name }}">{{ d.full_name }} — {{ d.specialty }} (каб. {{ d.cabinet }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Оценка</label>
+          <select class="form-select" name="rating" required>
+            <option value="5">★★★★★ (5) — отлично</option>
+            <option value="4">★★★★☆ (4) — хорошо</option>
+            <option value="3">★★★☆☆ (3) — удовлетворительно</option>
+            <option value="2">★★☆☆☆ (2) — плохо</option>
+            <option value="1">★☆☆☆☆ (1) — очень плохо</option>
+          </select>
+        </div>
+        <div class="col-12">
+          <label class="form-label">Текст отзыва</label>
+          <textarea class="form-control" name="text" rows="3" minlength="10" maxlength="500"
+                    required placeholder="Расскажите о приёме (10–500 символов)"></textarea>
+        </div>
+      </div>
+      <button class="btn btn-accent mt-3" type="submit">Опубликовать отзыв</button>
+      <span class="small text-muted ms-2">Отзыв будет подписан: {{ current_user.full_name }}</span>
+    </form>
+    {% else %}
+    <div class="alert alert-warning mb-0">
+      Чтобы оставить отзыв, <a href="{{ url_for('login', next='/reviews') }}">войдите</a>
+      или <a href="{{ url_for('register') }}">зарегистрируйтесь</a>.
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- Рейтинг врачей -->
+  <div class="col-lg-6">
+    <div class="card shadow-sm">
+      <div class="card-header bg-white fw-semibold">Рейтинг врачей</div>
+      <div class="table-responsive">
+        <table class="table table-sm table-striped mb-0 align-middle">
+          <thead>
+            <tr><th>Врач</th><th>Специальность</th><th class="text-center">Оценка</th><th class="text-end">Отзывов</th></tr>
+          </thead>
+          <tbody>
+            {% for d in doctors %}
+            {% set r = ratings.get(d.full_name) %}
+            <tr>
+              <td>{{ d.full_name }}</td>
+              <td class="text-muted">{{ d.specialty }}</td>
+              <td class="text-center">
+                {% if r %}
+                  <span class="text-warning">{{ "★" * (r.avg_rating|round|int) }}{{ "☆" * (5 - r.avg_rating|round|int) }}</span>
+                  {{ "%.1f"|format(r.avg_rating) }}
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="text-end">{{ r.review_count if r else 0 }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Лента отзывов -->
+  <div class="col-lg-6">
+    <div class="card shadow-sm">
+      <div class="card-header bg-white fw-semibold">Последние отзывы</div>
+      <div class="card-body">
+        {% for r in reviews %}
+        <div class="border-bottom pb-2 mb-2">
+          <div class="d-flex justify-content-between">
+            <b>{{ r.doctor_name }}</b>
+            <span class="text-warning">{{ "★" * r.rating }}{{ "☆" * (5 - r.rating) }}</span>
+          </div>
+          <div class="small text-muted">{{ r.doctor_specialty }} · {{ r.author_name }} · {{ r.created_at }}</div>
+          <p class="mb-0">{{ r.text }}</p>
+        </div>
+        {% else %}
+        <div class="text-muted">Отзывов пока нет — станьте первым!</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

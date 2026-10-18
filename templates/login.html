@@ -1,0 +1,41 @@
+<!-- templates/login.html — сервис входа -->
+{% extends "base.html" %}
+{% block title %}Вход · {{ org_name }}{% endblock %}
+{% block content %}
+
+<h1 class="h3 mb-3">Вход на сайт</h1>
+
+<div class="row">
+  <div class="col-md-5">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <form method="post" action="{{ url_for('login', next=request.args.get('next', '')) }}">
+          <div class="mb-3">
+            <label class="form-label">Логин</label>
+            <input class="form-control" name="username" required autofocus>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Пароль</label>
+            <input class="form-control" type="password" name="password" required>
+          </div>
+          <button class="btn btn-accent" type="submit">Войти</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-7">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <h2 class="h6">Что даёт вход</h2>
+        <ul class="mb-2">
+          <li>оставлять <a href="{{ url_for('reviews') }}">отзывы и оценки врачам</a>;</li>
+          <li>записываться на приём как пациент поликлиники;</li>
+          <li>видеть своё имя на всех страницах сайта.</li>
+        </ul>
+        <p class="mb-0">Нет аккаунта? <a href="{{ url_for('register') }}">Зарегистрируйтесь</a>.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
