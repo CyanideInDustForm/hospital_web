@@ -1,18 +1,24 @@
 # app.py
-# Лабораторная работа №1 «Проектирование и создание статического web-сайта»
+# Лабораторные работы №1–4 по курсу «Интернет-технологии»
 # Предметная область: городская поликлиника (учёт посещений врачей).
 #
-# Структура сайта:
-#   Статические страницы:  Главная, О клинике, Достижения, Контакты, Полезные ссылки
-#   Данные из БД:          Новости (ввод + показ), Счётчик посещений, Топ страниц
-#   Сервисы:               Погода, Курсы валют, Поиск по сайту, Карта (геолокация)
-#   Приложение к БД:       Запись к врачу / Поиск по БД / Администрирование
-#   XML доступ к данным:   /xml/news, /xml/appointments
+# ЛР1 — статический сайт: страницы, меню, сервисы (погода, валюта, поиск,
+#       топ страниц, карта, регистрация/вход, отзывы, гостевая, ИМТ).
+# ЛР2 — XML/XSL: собственный XML-файл (прейскурант, 6 тегов), визуализация
+#       таблицей на JS, поиск по символам, сортировка по колонкам. Стр. /xml
+# ЛР3 — web-приложение с динамическим доступом к БД: запись на приём,
+#       поиск (1/2 таблицы), агрегация, диаграммы (Chart.js). Стр. /app, /stats
+# ЛР4 — обмен данными: объединённые новости (свои + внешняя RSS-лента,
+#       поле замены ленты), экспорт новостей: CSV, XML, ASCII с XML-тегами.
+#       Стр. /rss
 from __future__ import annotations
 
 import os
 import re
+import csv
+import io
 import sqlite3
+import urllib.request
 import xml.etree.ElementTree as ET
 import xml.dom.minidom
 from datetime import datetime, date
@@ -29,10 +35,8 @@ from departments import DEPARTMENTS, DEPARTMENT_MAP, department_doctors
 
 APP_ROOT = os.path.dirname(os.path.abspath(__file__))
 
-DB_MAP = {
-    "A": os.path.join(APP_ROOT, "data", "clinic_a.sqlite3"),
-    "B": os.path.join(APP_ROOT, "data", "clinic_b.sqlite3"),
-}
+# Единая СУБД (переключатель больше не нужен)
+CLINIC_DB = os.path.join(APP_ROOT, "data", "clinic.sqlite3")
 
 SITE_DB = os.path.join(APP_ROOT, "data", "site.sqlite3")
 SITE_SCHEMA = os.path.join(APP_ROOT, "schema_site.sql")
@@ -42,6 +46,16 @@ ALLOWED_ADMIN_TABLES = {
 }
 
 ORG_NAME = "Городская поликлиника № 5"
+
+# Цена приёма по категории врача (подставляется в форме записи)
+PRICE_BY_CATEGORY = {
+    "Высшая категория": 2500,
+    "Первая категория": 1800,
+    "Вторая категория": 1200,
+}
+
+# RSS-лента по умолчанию для страницы «Объединённые новости» (ЛР4)
+DEFAULT_RSS_FEED = "https://lenta.ru/rss"
 
 # ---------------------------------------------------------------------------
 # Контент статических страниц для поисковика по сайту.
@@ -119,6 +133,29 @@ SITE_PAGES: Dict[str, Dict[str, str]] = {
         "url": "/top",
         "text": ("Топ страниц сайта по посещаемости. Рейтинг страниц по данным "
                  "счётчика посещений. Сервис статистики."),
+    },
+    "xml_info": {
+        "title": "XML (ЛР2) — Прейскурант",
+        "url": "/xml",
+        "text": ("Вторая лабораторная: собственный XML-файл с прейскурантом услуг "
+                 "поликлиники — теги услуги, название, отделение, категория врача, цена, "
+                 "срок. Таблица строится на JavaScript, работает поиск по символам "
+                 "и сортировка по всем колонкам."),
+    },
+    "rss": {
+        "title": "RSS (ЛР4) — Объединённые новости",
+        "url": "/rss",
+        "text": ("Четвёртая лабораторная: объединённые новости — свои новости "
+                 "поликлиники из базы данных плюс внешняя RSS-лента. Есть поле "
+                 "для замены новостной ленты. Экспорт новостей: CSV, XML, "
+                 "ASCII с XML-тегами."),
+    },
+    "stats": {
+        "title": "Статистика и диаграммы (ЛР3)",
+        "url": "/stats",
+        "text": ("Третья лабораторная: диаграммы по данным базы — количество приёмов "
+                 "по врачам, распределение записей по статусам, посещаемость сайта "
+                 "по дням. Построено на Chart.js."),
     },
     "app_home": {
         "title": "Приложение к БД — Запись к врачу",
@@ -293,14 +330,10 @@ def create_app() -> Flask:
             g.site_db = conn
         return g.site_db
 
-    def get_active_db_path() -> str:
-        db_key = session.get("db_key", "A")
-        return DB_MAP.get(db_key, DB_MAP["A"])
-
     def get_db() -> sqlite3.Connection:
-        """БД поликлиники (приложение к БД)."""
+        """Единая БД поликлиники."""
         if "db" not in g:
-            conn = sqlite3.connect(get_active_db_path())
+            conn = sqlite3.connect(CLINIC_DB)
             conn.row_factory = sqlite3.Row
             conn.execute("PRAGMA foreign_keys = ON;")
             g.db = conn
@@ -335,7 +368,7 @@ def create_app() -> Flask:
     TRACKED_ENDPOINTS = {
         "home", "about", "achievements", "news", "news_add",
         "contacts", "links", "services", "top", "site_search",
-        "xml_info", "app_home", "db_search", "admin",
+        "xml_info", "rss", "stats", "app_home", "db_search", "admin",
         # раздел «Клиника»
         "clinic_department", "clinic_oms", "clinic_dms",
         "clinic_patients", "clinic_lab",
@@ -395,7 +428,6 @@ def create_app() -> Flask:
         current_key = page_key_for(request.endpoint or "")
         tracked = (request.endpoint or "") in TRACKED_ENDPOINTS
         return {
-            "active_db_key": session.get("db_key", "A"),
             "org_name": ORG_NAME,
             "today": date.today().isoformat(),
             "current_year": date.today().year,
@@ -403,6 +435,7 @@ def create_app() -> Flask:
             "current_page_visits": visits_count(current_key) if tracked else None,
             "current_user": current_user(),
             "departments": DEPARTMENTS,
+            "price_by_category": PRICE_BY_CATEGORY,
             "now_local_dt": datetime.now().strftime("%Y-%m-%dT%H:%M"),
             "min_visit_dt": (datetime.now().replace(second=0, microsecond=0)
                              .replace(year=datetime.now().year - 5)).strftime("%Y-%m-%dT%H:%M"),
@@ -599,23 +632,161 @@ def create_app() -> Flask:
         return Response(xml_str, mimetype="application/xml; charset=utf-8")
 
     # ==================================================================
-    #  ПРИЛОЖЕНИЕ К БД (учёт посещений врачей)
+    #  ЛР4 — ОБМЕН ДАННЫМИ: объединённые новости (свои + внешняя RSS)
     # ==================================================================
 
-    @app.get("/switch-db/<db_key>")
-    def switch_db(db_key: str):
-        if db_key not in DB_MAP:
-            flash("Неизвестный ключ БД.", "danger")
-            return redirect(url_for("home"))
-        session["db_key"] = db_key
-        next_url = request.args.get("next") or url_for("app_home")
-        flash(f"Активная база переключена на {db_key}.", "info")
-        return redirect(next_url)
+    def fetch_rss_items(feed_url: str, limit: int = 10) -> Tuple[List[Dict[str, str]], Optional[str]]:
+        """Скачивает RSS/Atom-ленту и возвращает (элементы, ошибка)."""
+        items: List[Dict[str, str]] = []
+        try:
+            req = urllib.request.Request(
+                feed_url,
+                headers={"User-Agent": "Mozilla/5.0 (Polik5-Lab4-RSS)"},
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                raw = resp.read()
+            root = ET.fromstring(raw)
+
+            def text_of(elem: ET.Element, tag: str) -> str:
+                child = elem.find(tag)
+                return (child.text or "").strip() if child is not None and child.text else ""
+
+            # RSS 2.0: rss > channel > item
+            for item in root.iter("item"):
+                items.append({
+                    "title": text_of(item, "title") or "(без заголовка)",
+                    "link": text_of(item, "link"),
+                    "date": text_of(item, "pubDate"),
+                    "description": re.sub(r"<[^>]+>", "", text_of(item, "description"))[:300],
+                    "source": feed_url,
+                })
+            # Atom: feed > entry
+            if not items:
+                ns = {"a": "http://www.w3.org/2005/Atom"}
+                for entry in root.findall("a:entry", ns):
+                    link_el = entry.find("a:link", ns)
+                    items.append({
+                        "title": (entry.findtext("a:title", "", ns) or "").strip() or "(без заголовка)",
+                        "link": link_el.get("href", "") if link_el is not None else "",
+                        "date": (entry.findtext("a:updated", "", ns) or "").strip(),
+                        "description": re.sub(r"<[^>]+>", "",
+                                              entry.findtext("a:summary", "", ns) or "")[:300],
+                        "source": feed_url,
+                    })
+            return items[:limit], None
+        except Exception as e:  # сеть, XML, таймаут — показываем ошибку на странице
+            return [], str(e)
+
+    @app.get("/rss")
+    def rss():
+        # Поле для замены новостной ленты (п. 6 правок преподавателя)
+        feed_url = (request.args.get("feed") or "").strip() or DEFAULT_RSS_FEED
+        own_news = get_site_db().execute(
+            "SELECT id, title, body, published_at FROM news "
+            "ORDER BY published_at DESC, id DESC LIMIT 10;"
+        ).fetchall()
+        feed_items, feed_error = fetch_rss_items(feed_url)
+        return render_template(
+            "rss.html",
+            own_news=own_news,
+            feed_url=feed_url,
+            feed_items=feed_items,
+            feed_error=feed_error,
+        )
+
+    # ---------- Форматы обмена данными (ЛР4): CSV, XML, ASCII с XML-тегами ----------
+
+    @app.get("/export/news.csv")
+    def export_news_csv():
+        """ASCII через разделитель со списком полей."""
+        rows = get_site_db().execute(
+            "SELECT id, title, published_at FROM news ORDER BY published_at DESC;"
+        ).fetchall()
+        buf = io.StringIO()
+        writer = csv.writer(buf, delimiter=";")
+        writer.writerow(["id", "title", "published_at"])
+        for r in rows:
+            writer.writerow([r["id"], r["title"], r["published_at"]])
+        return Response(
+            "\ufeff" + buf.getvalue(),
+            mimetype="text/csv; charset=utf-8",
+            headers={"Content-Disposition": "attachment; filename=news.csv"},
+        )
+
+    @app.get("/export/news.txt")
+    def export_news_txt():
+        """ASCII-файл, оконтуренный XML-тегами."""
+        rows = get_site_db().execute(
+            "SELECT id, title, body, published_at FROM news "
+            "ORDER BY published_at DESC;"
+        ).fetchall()
+        parts = ["<news>"]
+        for r in rows:
+            parts.append("  <item>")
+            parts.append(f"    <id>{r['id']}</id>")
+            parts.append(f"    <title>{r['title']}</title>")
+            parts.append(f"    <body>{r['body']}</body>")
+            parts.append(f"    <published_at>{r['published_at']}</published_at>")
+            parts.append("  </item>")
+        parts.append("</news>")
+        return Response(
+            "\n".join(parts),
+            mimetype="text/plain; charset=utf-8",
+            headers={"Content-Disposition": "attachment; filename=news.txt"},
+        )
+
+    # ==================================================================
+    #  ЛР3 — ДИАГРАММЫ (Chart.js): визуализация данных БД
+    # ==================================================================
+
+    @app.get("/stats")
+    def stats():
+        per_doctor = query_all("""
+            SELECT d.full_name AS doctor_name, d.category, COUNT(a.id) AS cnt
+            FROM doctors d
+            LEFT JOIN appointments a ON a.doctor_id = d.id
+            GROUP BY d.id
+            ORDER BY cnt DESC, d.full_name;
+        """)
+        per_status = query_all("""
+            SELECT s.name AS status_name, COUNT(a.id) AS cnt
+            FROM statuses s
+            LEFT JOIN appointments a ON a.status_id = s.id
+            GROUP BY s.id
+            ORDER BY s.id;
+        """)
+        visits_by_day = get_site_db().execute("""
+            SELECT substr(visited_at, 1, 10) AS day, COUNT(*) AS cnt
+            FROM page_visits
+            GROUP BY day
+            ORDER BY day
+            LIMIT 14;
+        """).fetchall()
+        avg_check = query_all("""
+            SELECT d.category, ROUND(AVG(a.price), 0) AS avg_price, COUNT(a.id) AS cnt
+            FROM appointments a
+            JOIN doctors d ON d.id = a.doctor_id
+            GROUP BY d.category
+            ORDER BY avg_price DESC;
+        """)
+        return render_template(
+            "stats.html",
+            per_doctor=[dict(r) for r in per_doctor],
+            per_status=[dict(r) for r in per_status],
+            visits_by_day=[dict(r) for r in visits_by_day],
+            avg_check=[dict(r) for r in avg_check],
+        )
+
+    # ==================================================================
+    #  ПРИЛОЖЕНИЕ К БД (учёт посещений врачей) — ЛР3
+    # ==================================================================
 
     @app.get("/app")
     def app_home():
         patients = query_all("SELECT id, full_name FROM patients ORDER BY full_name;")
-        doctors = query_all("SELECT id, full_name, specialty FROM doctors ORDER BY full_name;")
+        doctors = query_all(
+            "SELECT id, full_name, specialty, category FROM doctors ORDER BY full_name;"
+        )
         statuses = query_all("SELECT id, name FROM statuses ORDER BY id;")
         payment_types = query_all("SELECT id, name FROM payment_types ORDER BY id;")
 
@@ -1188,8 +1359,7 @@ def create_app() -> Flask:
                 execute("""
                     INSERT INTO patients(full_name, phone, email, birth_date)
                     VALUES (?, ?, ?, ?);
-                """, (full_name, phone,
-                      email if (email and len(email) <= 20) else None, birth_date))
+                """, (full_name, phone, email, birth_date))
             except sqlite3.IntegrityError:
                 patient_added = False
 

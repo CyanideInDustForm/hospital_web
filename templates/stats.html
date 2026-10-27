@@ -1,0 +1,122 @@
+<!-- templates/stats.html — ЛР3: диаграммы по данным БД (Chart.js) -->
+{% extends "base.html" %}
+{% block title %}Статистика и диаграммы (ЛР3) · {{ org_name }}{% endblock %}
+{% block content %}
+
+<h1 class="h3 mb-2">Лабораторная работа № 3 — Диаграммы по данным БД</h1>
+<p class="text-muted">
+  Визуализация данных базы поликлиники и статистики сайта. Построено на Chart.js.
+</p>
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">Приёмы по врачам</div>
+      <div class="card-body"><canvas id="chartDoctors"></canvas></div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">Записи по статусам</div>
+      <div class="card-body"><canvas id="chartStatuses"></canvas></div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">Посещаемость сайта по дням</div>
+      <div class="card-body"><canvas id="chartVisits"></canvas></div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">Средний чек приёма по категориям врачей</div>
+      <div class="card-body">
+        <canvas id="chartAvg"></canvas>
+        <table class="table table-sm mt-3 mb-0">
+          <thead><tr><th>Категория</th><th class="text-end">Средний чек, ₽</th><th class="text-end">Приёмов</th></tr></thead>
+          <tbody>
+            {% for r in avg_check %}
+            <tr>
+              <td>{{ r.category }}</td>
+              <td class="text-end">{{ "%.0f"|format(r.avg_price) }}</td>
+              <td class="text-end">{{ r.cnt }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+  var perDoctor = {{ per_doctor | tojson }};
+  var perStatus = {{ per_status | tojson }};
+  var visits = {{ visits_by_day | tojson }};
+  var avgCheck = {{ avg_check | tojson }};
+
+  new Chart(document.getElementById('chartDoctors'), {
+    type: 'bar',
+    data: {
+      labels: perDoctor.map(function (r) { return r.doctor_name; }),
+      datasets: [{
+        label: 'Приёмов',
+        data: perDoctor.map(function (r) { return r.cnt; }),
+        backgroundColor: 'rgba(13, 110, 253, 0.7)'
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }
+    }
+  });
+
+  new Chart(document.getElementById('chartStatuses'), {
+    type: 'doughnut',
+    data: {
+      labels: perStatus.map(function (r) { return r.status_name; }),
+      datasets: [{
+        data: perStatus.map(function (r) { return r.cnt; }),
+        backgroundColor: ['#0d6efd', '#198754', '#dc3545', '#fd7e14', '#6f42c1']
+      }]
+    },
+    options: { plugins: { legend: { position: 'bottom' } } }
+  });
+
+  new Chart(document.getElementById('chartVisits'), {
+    type: 'line',
+    data: {
+      labels: visits.map(function (r) { return r.day; }),
+      datasets: [{
+        label: 'Посещений',
+        data: visits.map(function (r) { return r.cnt; }),
+        borderColor: '#0d6efd',
+        backgroundColor: 'rgba(63, 224, 208, 0.3)',
+        fill: true,
+        tension: 0.3
+      }]
+    },
+    options: { scales: { y: { beginAtZero: true } } }
+  });
+
+  new Chart(document.getElementById('chartAvg'), {
+    type: 'bar',
+    data: {
+      labels: avgCheck.map(function (r) { return r.category; }),
+      datasets: [{
+        label: 'Средний чек, ₽',
+        data: avgCheck.map(function (r) { return r.avg_price; }),
+        backgroundColor: ['#198754', '#0d6efd', '#fd7e14']
+      }]
+    },
+    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+})();
+</script>
+{% endblock %}

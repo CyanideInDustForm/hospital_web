@@ -7,7 +7,7 @@ from typing import Dict, List
 
 # Импортируем списки врачей из seed.py — на сайте показываем тех же врачей,
 # что есть в базе данных.
-from seed import DOCTOR_NAMES, SPECIALTIES
+from seed import DOCTOR_NAMES, SPECIALTIES, category_by_id
 
 
 def doctor_info(i: int) -> Dict[str, str]:
@@ -17,12 +17,7 @@ def doctor_info(i: int) -> Dict[str, str]:
     cabinet = f"{100 + i}"
     # Стаж детерминированно выводим из номера врача (5–30 лет)
     exp = 5 + (i * 7) % 26
-    if exp >= 20:
-        category = "Высшая категория"
-    elif exp >= 12:
-        category = "Первая категория"
-    else:
-        category = "Вторая категория"
+    category = category_by_id(i)
     degree = "Кандидат медицинских наук" if i % 7 == 0 else ""
     return {
         "name": name,

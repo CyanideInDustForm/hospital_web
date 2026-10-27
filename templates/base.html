@@ -102,28 +102,26 @@
           </ul>
         </li>
 
-        <!-- Приложение к БД + XML -->
+        <!-- Приложение к БД (ЛР3) -->
         <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle {{ 'active' if current_page_key in ['app_home', 'db_search', 'admin', 'xml_info'] }}"
+          <a class="nav-link dropdown-toggle {{ 'active' if current_page_key in ['app_home', 'db_search', 'admin', 'stats'] }}"
              href="#" role="button" data-bs-toggle="dropdown">Приложение к БД</a>
           <ul class="dropdown-menu">
             <li><a class="dropdown-item" href="{{ url_for('app_home') }}">Запись к врачу</a></li>
             <li><a class="dropdown-item" href="{{ url_for('db_search', mode='one') }}">Поиск по БД</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('stats') }}">Статистика и диаграммы (ЛР3)</a></li>
             <li><a class="dropdown-item" href="{{ url_for('admin') }}">Администрирование БД</a></li>
-            <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item" href="{{ url_for('xml_info') }}">XML доступ к данным</a></li>
           </ul>
         </li>
-      </ul>
 
-      <!-- Переключатель базы данных (для приложения к БД) -->
-      <div class="d-flex gap-2 align-items-center">
-        <span class="small" style="color:#cfe2ff">База:</span>
-        <a class="btn btn-sm {{ 'btn-accent' if active_db_key=='A' else 'btn-outline-accent' }}"
-           href="{{ url_for('switch_db', db_key='A', next=request.full_path) }}">Access</a>
-        <a class="btn btn-sm {{ 'btn-accent' if active_db_key=='B' else 'btn-outline-accent' }}"
-           href="{{ url_for('switch_db', db_key='B', next=request.full_path) }}">Postgres</a>
-      </div>
+        <!-- ЛР2 и ЛР4 — отдельные пункты горизонтального меню -->
+        <li class="nav-item">
+          <a class="nav-link {{ 'active' if current_page_key == 'xml_info' }}" href="{{ url_for('xml_info') }}">XML (ЛР2)</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {{ 'active' if current_page_key == 'rss' }}" href="{{ url_for('rss') }}">RSS (ЛР4)</a>
+        </li>
+      </ul>
 
       <!-- Вход / регистрация -->
       <div class="d-flex gap-2 align-items-center ms-lg-2 mt-2 mt-lg-0">

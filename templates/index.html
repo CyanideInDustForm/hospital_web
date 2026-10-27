@@ -5,8 +5,8 @@
 
 <h1 class="h3 mb-1">Приложение к БД — запись на приём</h1>
 <p class="text-muted mb-3">
-  Электронная запись пациентов к врачам. Активная база данных: <b>{{ active_db_key }}</b>.
-  Переключение баз — в верхнем меню.
+  Электронная запись пациентов к врачам. Цена приёма зависит от категории врача
+  и подставляется автоматически (можно изменить вручную).
 </p>
 
 <div class="row g-4">
@@ -41,10 +41,18 @@
             <select class="form-select" name="doctor_id" id="doctorSelect" required>
               <option value="" selected disabled>Выберите...</option>
               {% for d in doctors %}
-                <option value="{{ d.id }}">{{ d.full_name }} ({{ d.specialty }})</option>
+                <option value="{{ d.id }}" data-category="{{ d.category }}">
+                  {{ d.full_name }} ({{ d.specialty }}, {{ d.category }})
+                </option>
               {% endfor %}
             </select>
             <div class="invalid-feedback">Нужен врач.</div>
+            <div class="form-text">
+              Цены по категориям:
+              {% for cat, price in price_by_category.items() %}
+                {{ cat }} — {{ price }} ₽{{ ";" if not loop.last }}
+              {% endfor %}
+            </div>
           </div>
 
           <!-- СТАТУС / ОПЛАТА -->
@@ -160,4 +168,22 @@
   </div>
 </div>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Цена приёма зависит от категории выбранного врача (подставляется автоматически)
+(function () {
+  var PRICES = {{ price_by_category | tojson }};
+  var doctorSelect = document.getElementById('doctorSelect');
+  var priceInput = document.querySelector('input[name="price"]');
+  doctorSelect.addEventListener('change', function () {
+    var opt = doctorSelect.options[doctorSelect.selectedIndex];
+    var category = opt.getAttribute('data-category');
+    if (category && PRICES[category] !== undefined) {
+      priceInput.value = PRICES[category].toFixed(2);
+    }
+  });
+})();
+</script>
 {% endblock %}

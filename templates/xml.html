@@ -1,40 +1,152 @@
-<!-- templates/xml.html -->
+<!-- templates/xml.html — ЛР2: собственный XML-файл, визуализация JS-таблицей -->
 {% extends "base.html" %}
-{% block title %}XML доступ к данным · {{ org_name }}{% endblock %}
+{% block title %}XML (ЛР2) — Прейскурант · {{ org_name }}{% endblock %}
 {% block content %}
 
-<h1 class="h3 mb-3">XML доступ к данным</h1>
-<p>
-  Сайт предоставляет данные из базы в формате XML. Ленты формируются сервером
-  на основе актуального содержимого баз данных.
+<h1 class="h3 mb-2">Лабораторная работа № 2 — XML + JS</h1>
+<p class="text-muted">
+  Собственный XML-файл <code>static/data/pricelist.xml</code> (теги:
+  <code>услуги</code>, <code>услуга</code>, <code>название</code>, <code>отделение</code>,
+  <code>категория</code>, <code>цена</code>, <code>срок</code> — 7 тегов, 19 объектов).
+  Таблица строится средствами JavaScript: <b>поиск по символам</b> и
+  <b>сортировка по любой колонке</b> (клик по заголовку).
 </p>
 
-<div class="row g-4">
+<div class="d-flex gap-2 align-items-center mb-3">
+  <input class="form-control" id="xmlSearch" type="search" placeholder="Поиск по символам, например: «карди»…" style="max-width: 420px">
+  <span class="text-muted small" id="xmlCount"></span>
+  <a class="btn btn-sm btn-outline-secondary ms-auto" href="{{ url_for('static', filename='data/pricelist.xml') }}" target="_blank">Открыть XML-файл</a>
+</div>
+
+<div class="card shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-striped table-hover align-middle mb-0" id="xmlTable">
+      <thead class="table-primary">
+        <tr>
+          <th data-col="название" style="cursor:pointer">Название <span class="sort-mark"></span></th>
+          <th data-col="отделение" style="cursor:pointer">Отделение <span class="sort-mark"></span></th>
+          <th data-col="категория" style="cursor:pointer">Категория <span class="sort-mark"></span></th>
+          <th data-col="цена" style="cursor:pointer" class="text-end">Цена, ₽ <span class="sort-mark"></span></th>
+          <th data-col="срок" style="cursor:pointer">Срок <span class="sort-mark"></span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="5" class="text-muted p-3">Загрузка XML…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<h2 class="h5 mt-4 mb-2">XML-данные из БД сайта (динамические ленты)</h2>
+<div class="row g-3">
   <div class="col-md-6">
     <div class="card shadow-sm h-100">
-      <div class="card-header bg-white fw-semibold">Новости сайта (XML)</div>
       <div class="card-body">
-        <p>Все новости поликлиники из базы сайта в формате XML.</p>
-        <a class="btn btn-accent" href="{{ url_for('xml_news') }}" target="_blank">
-          Открыть /xml/news</a>
+        <b>Новости поликлиники</b>
+        <p class="small text-muted mb-2">Формируется сервером из таблицы <code>news</code>.</p>
+        <a class="btn btn-sm btn-accent" href="{{ url_for('xml_news') }}" target="_blank">/xml/news</a>
       </div>
     </div>
   </div>
   <div class="col-md-6">
     <div class="card shadow-sm h-100">
-      <div class="card-header bg-white fw-semibold">Записи на приём (XML)</div>
       <div class="card-body">
-        <p>Последние 100 записей на приём из базы поликлиники (активная база: {{ active_db_key }}).</p>
-        <a class="btn btn-accent" href="{{ url_for('xml_appointments') }}" target="_blank">
-          Открыть /xml/appointments</a>
+        <b>Записи на приём</b>
+        <p class="small text-muted mb-2">Формируется сервером из таблицы <code>appointments</code>.</p>
+        <a class="btn btn-sm btn-accent" href="{{ url_for('xml_appointments') }}" target="_blank">/xml/appointments</a>
       </div>
     </div>
   </div>
 </div>
 
-<div class="alert alert-secondary mt-4">
-  XML-ленты можно подключать внешним приложениям или обрабатывать через XSL
-  (тема следующей лабораторной работы).
-</div>
+{% endblock %}
 
+{% block scripts %}
+<script>
+// --- ЛР2: загрузка XML, построение таблицы, поиск по символам, сортировка ---
+(function () {
+  var rows = [];          // массив объектов из XML
+  var sortCol = null, sortAsc = true;
+
+  var tbody = document.querySelector('#xmlTable tbody');
+  var searchInput = document.getElementById('xmlSearch');
+  var countLabel = document.getElementById('xmlCount');
+
+  function loadXML() {
+    fetch("{{ url_for('static', filename='data/pricelist.xml') }}")
+      .then(function (r) { return r.text(); })
+      .then(function (text) {
+        var doc = new DOMParser().parseFromString(text, "application/xml");
+        var items = doc.getElementsByTagName('услуга');
+        for (var i = 0; i < items.length; i++) {
+          var el = items[i];
+          function t(tag) {
+            var n = el.getElementsByTagName(tag)[0];
+            return n ? n.textContent.trim() : '';
+          }
+          rows.push({
+            'название': t('название'),
+            'отделение': t('отделение'),
+            'категория': t('категория'),
+            'цена': t('цена'),
+            'срок': t('срок')
+          });
+        }
+        render();
+      })
+      .catch(function () {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-danger p-3">Не удалось загрузить XML-файл.</td></tr>';
+      });
+  }
+
+  function render() {
+    var q = searchInput.value.toLowerCase();
+    var filtered = rows.filter(function (r) {
+      if (!q) return true;
+      // поиск по символам — по всем полям записи
+      return Object.values(r).some(function (v) {
+        return String(v).toLowerCase().indexOf(q) !== -1;
+      });
+    });
+
+    if (sortCol) {
+      filtered.sort(function (a, b) {
+        var va = a[sortCol], vb = b[sortCol];
+        var na = parseFloat(va), nb = parseFloat(vb);
+        if (!isNaN(na) && !isNaN(nb)) return sortAsc ? na - nb : nb - na;
+        return sortAsc
+          ? String(va).localeCompare(String(vb), 'ru')
+          : String(vb).localeCompare(String(va), 'ru');
+      });
+    }
+
+    countLabel.textContent = 'Показано: ' + filtered.length + ' из ' + rows.length;
+    if (!filtered.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-muted p-3">Ничего не найдено.</td></tr>';
+      return;
+    }
+    var html = '';
+    filtered.forEach(function (r) {
+      html += '<tr><td>' + r['название'] + '</td><td>' + r['отделение'] + '</td><td>'
+            + r['категория'] + '</td><td class="text-end">' + r['цена'] + '</td><td>'
+            + r['срок'] + '</td></tr>';
+    });
+    tbody.innerHTML = html;
+  }
+
+  // сортировка по клику на заголовок колонки
+  document.querySelectorAll('#xmlTable thead th').forEach(function (th) {
+    th.addEventListener('click', function () {
+      var col = th.dataset.col;
+      if (sortCol === col) { sortAsc = !sortAsc; } else { sortCol = col; sortAsc = true; }
+      document.querySelectorAll('#xmlTable .sort-mark').forEach(function (s) { s.textContent = ''; });
+      th.querySelector('.sort-mark').textContent = sortAsc ? ' ▲' : ' ▼';
+      render();
+    });
+  });
+
+  searchInput.addEventListener('input', render);
+  loadXML();
+})();
+</script>
 {% endblock %}

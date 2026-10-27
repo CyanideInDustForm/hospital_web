@@ -9,10 +9,8 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 SCHEMA_PATH = os.path.join(ROOT, "schema.sql")
 DATA_DIR = os.path.join(ROOT, "data")
 
-DBS = {
-    "A": os.path.join(DATA_DIR, "clinic_a.sqlite3"),
-    "B": os.path.join(DATA_DIR, "clinic_b.sqlite3"),
-}
+# Единая СУБД (переключатель больше не нужен)
+DB = os.path.join(DATA_DIR, "clinic.sqlite3")
 
 STATUSES = [
     (1, "Запланирована"),
@@ -84,12 +82,22 @@ def make_patient(i: int):
     return (full_name, phone, email, birth.isoformat())
 
 
+def category_by_id(i: int) -> str:
+    """Категория врача (тот же алгоритм, что в migrate.py и departments.py)."""
+    exp = 5 + (i * 7) % 26
+    if exp >= 20:
+        return "Высшая категория"
+    if exp >= 12:
+        return "Первая категория"
+    return "Вторая категория"
+
+
 def make_doctor(i: int):
     full_name = DOCTOR_NAMES[i - 1]
     specialty = SPECIALTIES[(i - 1) % len(SPECIALTIES)]
     cabinet = f"{100 + i}"
     phone = random_phone()
-    return (full_name, specialty, cabinet, phone)
+    return (full_name, specialty, cabinet, phone, category_by_id(i))
 
 
 # --- ПРИЧИНЫ ОБРАЩЕНИЯ ---
@@ -138,7 +146,7 @@ def seed_one(db_path: str):
         patients
     )
     con.executemany(
-        "INSERT INTO doctors(full_name, specialty, cabinet, phone) VALUES (?, ?, ?, ?);",
+        "INSERT INTO doctors(full_name, specialty, cabinet, phone, category) VALUES (?, ?, ?, ?, ?);",
         doctors
     )
 
@@ -156,9 +164,8 @@ def seed_one(db_path: str):
 
 def main():
     ensure_dirs()
-    seed_one(DBS["A"])
-    seed_one(DBS["B"])
-    print("OK: created DB A and DB B")
+    seed_one(DB)
+    print("OK: created data/clinic.sqlite3")
 
 
 if __name__ == "__main__":
