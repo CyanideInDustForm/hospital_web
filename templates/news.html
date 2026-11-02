@@ -1,27 +1,142 @@
-<!-- templates/news.html -->
+<!-- templates/news.html — единая страница новостей:
+     свои новости (БД) + внешняя RSS-лента в двух колонках,
+     поиск по новостям, поле замены ленты, экспорт (ЛР4). -->
 {% extends "base.html" %}
 {% block title %}Новости · {{ org_name }}{% endblock %}
 {% block content %}
 
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
   <h1 class="h3 mb-0">Новости поликлиники</h1>
   <a class="btn btn-accent" href="{{ url_for('news_add') }}">+ Добавить новость</a>
 </div>
 
-<p class="text-muted">Новости хранятся в базе данных сайта и выводятся из неё.</p>
+<p class="text-muted">
+  Объединённая лента: слева — новости поликлиники из базы данных сайта,
+  справа — внешняя новостная RSS-лента (её можно заменить).
+</p>
 
-{% if news %}
-  {% for n in news %}
-  <div class="card shadow-sm mb-3">
-    <div class="card-body">
-      <div class="text-muted small mb-1">{{ n.published_at }}</div>
-      <h2 class="h5">{{ n.title }}</h2>
-      <p class="mb-0">{{ n.body }}</p>
+<!-- Поиск по новостям (отдельно от общего поиска по сайту) -->
+<div class="card shadow-sm mb-3">
+  <div class="card-body">
+    <form method="get" action="{{ url_for('news') }}" class="d-flex gap-2 align-items-center flex-wrap" role="search">
+      <label class="form-label mb-0 fw-semibold">Поиск по новостям:</label>
+      <input class="form-control" type="search" name="q" value="{{ q }}"
+             placeholder="Слова из заголовка или текста новости" style="max-width: 420px">
+      <input type="hidden" name="feed" value="{{ feed_url }}">
+      <button class="btn btn-accent" type="submit">Найти</button>
+      {% if q %}<a class="btn btn-outline-secondary" href="{{ url_for('news') }}">Сбросить</a>{% endif %}
+    </form>
+    {% if q %}
+    <div class="small text-muted mt-2">
+      По запросу «<b>{{ q }}</b>» найдено новостей: <b>{{ news|length }}</b>.
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Поле для замены новостной ленты -->
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <form method="get" action="{{ url_for('news') }}" class="d-flex gap-2 align-items-center flex-wrap">
+      <label class="form-label mb-0 fw-semibold">Новостная лента (RSS/Atom):</label>
+      <input class="form-control" type="text" name="feed" value="{{ feed_url }}" style="max-width: 520px">
+      {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+      <button class="btn btn-accent" type="submit">Заменить ленту</button>
+    </form>
+    <div class="small text-muted mt-2">
+      Текущая лента: <code>{{ feed_url }}</code>. Например:
+      <code>https://lenta.ru/rss</code>,
+      <code>https://ria.ru/export/rss2/archive/index.xml</code>
     </div>
   </div>
-  {% endfor %}
-{% else %}
-  <div class="alert alert-secondary">Новостей пока нет.</div>
-{% endif %}
+</div>
+
+<div class="row g-4">
+  <!-- Свои новости из БД -->
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">📰 Наши новости (из базы данных)</div>
+      <div class="card-body">
+        {% if news %}
+          {% for n in news %}
+          <div class="border-bottom pb-2 mb-2">
+            <div class="text-muted small">{{ n.published_at }}</div>
+            <b>{{ n.title }}</b>
+            <p class="mb-0 small">{{ n.body }}</p>
+          </div>
+          {% endfor %}
+        {% elif q %}
+          <div class="alert alert-secondary mb-0">
+            По запросу «{{ q }}» ничего не найдено. Попробуйте другие слова.
+          </div>
+        {% else %}
+          <div class="alert alert-secondary mb-0">Новостей пока нет.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Внешняя RSS-лента -->
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">🌐 Внешняя лента: {{ feed_url }}</div>
+      <div class="card-body">
+        {% if feed_error %}
+        <div class="alert alert-warning mb-0">
+          Не удалось загрузить ленту: <code>{{ feed_error }}</code>.<br>
+          Проверьте адрес или подключение к интернету — свои новости слева доступны всегда.
+        </div>
+        {% elif feed_items %}
+          {% for it in feed_items %}
+          <div class="border-bottom pb-2 mb-2">
+            <div class="text-muted small">{{ it.date }}</div>
+            {% if it.link %}
+            <a href="{{ it.link }}" target="_blank" rel="noopener" class="fw-semibold">{{ it.title }}</a>
+            {% else %}
+            <b>{{ it.title }}</b>
+            {% endif %}
+            {% if it.description %}
+            <p class="mb-0 small text-muted">{{ it.description }}</p>
+            {% endif %}
+          </div>
+          {% endfor %}
+        {% else %}
+        <div class="text-muted">В ленте нет записей.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2 class="h5 mt-4 mb-2">Форматы обмена данными (экспорт наших новостей)</h2>
+<div class="row g-3">
+  <div class="col-md-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <b>CSV — ASCII через разделитель</b>
+        <p class="small text-muted mb-2">Поля id; title; published_at, разделитель «;».</p>
+        <a class="btn btn-sm btn-accent" href="{{ url_for('export_news_csv') }}">Скачать news.csv</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <b>XML-файл</b>
+        <p class="small text-muted mb-2">Новости, оконтуренные XML-тегами (well-formed).</p>
+        <a class="btn btn-sm btn-accent" href="{{ url_for('xml_news') }}" target="_blank">Открыть /xml/news</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <b>ASCII с XML-тегами</b>
+        <p class="small text-muted mb-2">Текстовый файл с теговой разметкой записей.</p>
+        <a class="btn btn-sm btn-accent" href="{{ url_for('export_news_txt') }}">Скачать news.txt</a>
+      </div>
+    </div>
+  </div>
+</div>
 
 {% endblock %}

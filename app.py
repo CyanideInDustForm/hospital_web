@@ -9,8 +9,8 @@
 # ЛР3 — web-приложение с динамическим доступом к БД: запись на приём,
 #       поиск (1/2 таблицы), агрегация, диаграммы (Chart.js). Стр. /app, /stats
 # ЛР4 — обмен данными: объединённые новости (свои + внешняя RSS-лента,
-#       поле замены ленты), экспорт новостей: CSV, XML, ASCII с XML-тегами.
-#       Стр. /rss
+#       поле замены ленты, поиск по новостям) на единой странице /news,
+#       экспорт новостей: CSV, XML, ASCII с XML-тегами. /rss — редирект на /news.
 from __future__ import annotations
 
 import os
@@ -55,7 +55,7 @@ PRICE_BY_CATEGORY = {
 }
 
 # RSS-лента по умолчанию для страницы «Объединённые новости» (ЛР4)
-DEFAULT_RSS_FEED = "https://lenta.ru/rss"
+DEFAULT_RSS_FEED = "https://naked-science.ru/feed/gn"
 
 # ---------------------------------------------------------------------------
 # Контент статических страниц для поисковика по сайту.
@@ -102,7 +102,9 @@ SITE_PAGES: Dict[str, Dict[str, str]] = {
         "url": "/news",
         "text": ("Новости поликлиники. Анонсы акций, изменения расписания врачей, "
                  "информация о вакцинации, профилактические осмотры, новое оборудование. "
-                 "Новости хранятся в базе данных сайта, добавление через форму на сайте."),
+                 "Объединённая лента: свои новости из базы данных и внешняя RSS-лента "
+                 "в двух колонках, поле замены ленты, поиск по новостям. "
+                 "Добавление новости через форму на сайте."),
     },
     "contacts": {
         "title": "Контакты",
@@ -145,9 +147,9 @@ SITE_PAGES: Dict[str, Dict[str, str]] = {
     "rss": {
         "title": "RSS (ЛР4) — Объединённые новости",
         "url": "/rss",
-        "text": ("Четвёртая лабораторная: объединённые новости — свои новости "
-                 "поликлиники из базы данных плюс внешняя RSS-лента. Есть поле "
-                 "для замены новостной ленты. Экспорт новостей: CSV, XML, "
+        "text": ("Четвёртая лабораторная: объединённые новости на странице «Новости» — "
+                 "свои новости поликлиники из базы данных плюс внешняя RSS-лента. "
+                 "Есть поле для замены новостной ленты. Экспорт новостей: CSV, XML, "
                  "ASCII с XML-тегами."),
     },
     "stats": {
@@ -458,11 +460,9 @@ def create_app() -> Flask:
 
     @app.get("/")
     def home():
-        latest_news = get_site_db().execute(
-            "SELECT id, title, body, published_at FROM news "
-            "ORDER BY published_at DESC, id DESC LIMIT 3;"
-        ).fetchall()
-        return render_template("home.html", latest_news=latest_news)
+        # Новости на главной не выводятся (правка преподавателя): свои новости
+        # показываются только на странице /news — вместе с внешней RSS-лентой.
+        return render_template("home.html")
 
     @app.get("/about")
     def about():
@@ -480,13 +480,41 @@ def create_app() -> Flask:
     #  НОВОСТИ — через БД (ввод и показ)
     # ==================================================================
 
+    # ==================================================================
+    #  НОВОСТИ — единая страница: свои новости (БД) + внешняя RSS-лента
+    #  в двух колонках, поиск по новостям, поле замены ленты (ЛР4).
+    #  Правки преподавателя: лента объединена, новости не дублируются
+    #  в двух местах, поиск по новостям — отдельно на этой странице.
+    # ==================================================================
+
     @app.get("/news")
     def news():
-        items = get_site_db().execute(
-            "SELECT id, title, body, published_at FROM news "
-            "ORDER BY published_at DESC, id DESC;"
-        ).fetchall()
-        return render_template("news.html", news=items)
+        # Поиск по новостям (по заголовку и тексту, все слова запроса)
+        q = (request.args.get("q") or "").strip()
+        sql = "SELECT id, title, body, published_at FROM news"
+        params: List[Any] = []
+        words = [w.lower() for w in q.split() if len(w) >= 2]
+        if q and words:
+            conds = []
+            for w in words:
+                conds.append("(lower(title) LIKE ? OR lower(body) LIKE ?)")
+                params.extend([f"%{w}%", f"%{w}%"])
+            sql += " WHERE " + " AND ".join(conds)
+        sql += " ORDER BY published_at DESC, id DESC;"
+        items = get_site_db().execute(sql, tuple(params)).fetchall()
+
+        # Внешняя лента с полем замены (п. 6 правок преподавателя)
+        feed_url = (request.args.get("feed") or "").strip() or DEFAULT_RSS_FEED
+        feed_items, feed_error = fetch_rss_items(feed_url)
+
+        return render_template(
+            "news.html",
+            news=items,
+            q=q,
+            feed_url=feed_url,
+            feed_items=feed_items,
+            feed_error=feed_error,
+        )
 
     @app.route("/news/add", methods=["GET", "POST"])
     def news_add():
@@ -679,20 +707,13 @@ def create_app() -> Flask:
 
     @app.get("/rss")
     def rss():
-        # Поле для замены новостной ленты (п. 6 правок преподавателя)
-        feed_url = (request.args.get("feed") or "").strip() or DEFAULT_RSS_FEED
-        own_news = get_site_db().execute(
-            "SELECT id, title, body, published_at FROM news "
-            "ORDER BY published_at DESC, id DESC LIMIT 10;"
-        ).fetchall()
-        feed_items, feed_error = fetch_rss_items(feed_url)
-        return render_template(
-            "rss.html",
-            own_news=own_news,
-            feed_url=feed_url,
-            feed_items=feed_items,
-            feed_error=feed_error,
-        )
+        # Объединённые новости перенесены на /news (правки преподавателя:
+        # лента объединена и не дублируется в двух местах).
+        # URL /rss сохранён для совместимости (меню, старые ссылки, счётчик).
+        feed = (request.args.get("feed") or "").strip()
+        if feed:
+            return redirect(url_for("news", feed=feed))
+        return redirect(url_for("news"))
 
     # ---------- Форматы обмена данными (ЛР4): CSV, XML, ASCII с XML-тегами ----------
 
