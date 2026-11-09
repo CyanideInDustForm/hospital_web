@@ -911,6 +911,21 @@ def create_app() -> Flask:
         except sqlite3.IntegrityError as e:
             return jsonify({"ok": False, "error": str(e)}), 400
 
+    @app.post("/api/statuses/create")
+    def api_create_status():
+        """Быстрое добавление статуса записи из формы «Запись на приём» (кнопка «+»)."""
+        try:
+            name = request.form["name"].strip()
+            if not (2 <= len(name) <= 20):
+                return jsonify({"ok": False, "error": "Название статуса: 2–20 символов."}), 400
+            new_id = execute("INSERT INTO statuses(name) VALUES (?);", (name,))
+            row = query_all("SELECT id, name FROM statuses WHERE id=?;", (new_id,))[0]
+            return jsonify({"ok": True, "id": row["id"], "label": row["name"]})
+        except (KeyError, ValueError):
+            return jsonify({"ok": False, "error": "Некорректные данные."}), 400
+        except sqlite3.IntegrityError as e:
+            return jsonify({"ok": False, "error": str(e)}), 400
+
     # ---------- Поиск по БД ----------
     @app.get("/dbsearch")
     def db_search():

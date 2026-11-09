@@ -26,26 +26,34 @@
           <!-- ПАЦИЕНТ -->
           <div class="mb-3">
             <label class="form-label">Пациент</label>
-            <select class="form-select" name="patient_id" id="patientSelect" required>
-              <option value="" selected disabled>Выберите...</option>
-              {% for p in patients %}
-                <option value="{{ p.id }}">{{ p.full_name }}</option>
-              {% endfor %}
-            </select>
+            <div class="input-group">
+              <select class="form-select" name="patient_id" id="patientSelect" required>
+                <option value="" selected disabled>Выберите...</option>
+                {% for p in patients %}
+                  <option value="{{ p.id }}">{{ p.full_name }}</option>
+                {% endfor %}
+              </select>
+              <button class="btn btn-outline-secondary" type="button" title="Добавить пациента"
+                      data-bs-toggle="modal" data-bs-target="#patientModal">+</button>
+            </div>
             <div class="invalid-feedback">Нужен пациент.</div>
           </div>
 
           <!-- ВРАЧ -->
           <div class="mb-3">
             <label class="form-label">Врач</label>
-            <select class="form-select" name="doctor_id" id="doctorSelect" required>
-              <option value="" selected disabled>Выберите...</option>
-              {% for d in doctors %}
-                <option value="{{ d.id }}" data-category="{{ d.category }}">
-                  {{ d.full_name }} ({{ d.specialty }}, {{ d.category }})
-                </option>
-              {% endfor %}
-            </select>
+            <div class="input-group">
+              <select class="form-select" name="doctor_id" id="doctorSelect" required>
+                <option value="" selected disabled>Выберите...</option>
+                {% for d in doctors %}
+                  <option value="{{ d.id }}" data-category="{{ d.category }}">
+                    {{ d.full_name }} ({{ d.specialty }}, {{ d.category }})
+                  </option>
+                {% endfor %}
+              </select>
+              <button class="btn btn-outline-secondary" type="button" title="Добавить врача"
+                      data-bs-toggle="modal" data-bs-target="#doctorModal">+</button>
+            </div>
             <div class="invalid-feedback">Нужен врач.</div>
             <div class="form-text">
               Цены по категориям:
@@ -59,11 +67,15 @@
           <div class="row g-2">
             <div class="col-md-6">
               <label class="form-label">Статус</label>
-              <select class="form-select" name="status_id" required>
-                {% for s in statuses %}
-                  <option value="{{ s.id }}">{{ s.name }}</option>
-                {% endfor %}
-              </select>
+              <div class="input-group">
+                <select class="form-select" name="status_id" id="statusSelect" required>
+                  {% for s in statuses %}
+                    <option value="{{ s.id }}">{{ s.name }}</option>
+                  {% endfor %}
+                </select>
+                <button class="btn btn-outline-secondary" type="button" title="Добавить статус"
+                        data-bs-toggle="modal" data-bs-target="#statusModal">+</button>
+              </div>
             </div>
             <div class="col-md-6">
               <label class="form-label">Оплата</label>
@@ -168,6 +180,96 @@
   </div>
 </div>
 
+<!-- ===== Модальные окна быстрого добавления (кнопки «+») ===== -->
+<div class="modal fade" id="patientModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Новый пациент</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-danger d-none" id="patientModalError"></div>
+        <div class="mb-2">
+          <label class="form-label">ФИО</label>
+          <input class="form-control" id="npFullName" minlength="5" maxlength="60">
+        </div>
+        <div class="mb-2">
+          <label class="form-label">Телефон</label>
+          <input class="form-control" id="npPhone" minlength="10" maxlength="16" placeholder="+7...">
+        </div>
+        <div class="mb-2">
+          <label class="form-label">Email (опционально)</label>
+          <input class="form-control" id="npEmail" maxlength="60">
+        </div>
+        <div class="mb-2">
+          <label class="form-label">Дата рождения</label>
+          <input class="form-control" type="date" id="npBirthDate" min="1920-01-01" max="{{ today }}">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button type="button" class="btn btn-accent" id="npSubmit">Добавить</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="doctorModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Новый врач</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-danger d-none" id="doctorModalError"></div>
+        <div class="mb-2">
+          <label class="form-label">ФИО</label>
+          <input class="form-control" id="ndFullName" minlength="5" maxlength="60">
+        </div>
+        <div class="mb-2">
+          <label class="form-label">Специальность</label>
+          <input class="form-control" id="ndSpecialty" minlength="3" maxlength="40">
+        </div>
+        <div class="mb-2">
+          <label class="form-label">Кабинет</label>
+          <input class="form-control" id="ndCabinet" minlength="1" maxlength="10">
+        </div>
+        <div class="mb-2">
+          <label class="form-label">Телефон</label>
+          <input class="form-control" id="ndPhone" minlength="10" maxlength="16" placeholder="+7...">
+        </div>
+        <div class="form-text">Категория по умолчанию — «Вторая категория» (меняется в администрировании).</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button type="button" class="btn btn-accent" id="ndSubmit">Добавить</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="statusModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Новый статус записи</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-danger d-none" id="statusModalError"></div>
+        <label class="form-label">Название</label>
+        <input class="form-control" id="nsName" minlength="2" maxlength="20">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button type="button" class="btn btn-accent" id="nsSubmit">Добавить</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -182,6 +284,84 @@
     var category = opt.getAttribute('data-category');
     if (category && PRICES[category] !== undefined) {
       priceInput.value = PRICES[category].toFixed(2);
+    }
+  });
+})();
+
+// Кнопки «+»: быстрое добавление пациента/врача/статуса без ухода со страницы
+(function () {
+  function showError(id, msg) {
+    var el = document.getElementById(id);
+    el.textContent = msg;
+    el.classList.remove('d-none');
+  }
+
+  async function postForm(url, data) {
+    var body = new FormData();
+    Object.keys(data).forEach(function (k) { body.append(k, data[k]); });
+    var resp = await fetch(url, { method: 'POST', body: body });
+    return resp.json();
+  }
+
+  function addOption(selectId, value, label, extraAttrs) {
+    var sel = document.getElementById(selectId);
+    var opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = label;
+    if (extraAttrs) {
+      Object.keys(extraAttrs).forEach(function (k) { opt.setAttribute(k, extraAttrs[k]); });
+    }
+    sel.appendChild(opt);
+    sel.value = value;
+    sel.dispatchEvent(new Event('change'));
+  }
+
+  function closeModal(id) {
+    bootstrap.Modal.getOrCreateInstance(document.getElementById(id)).hide();
+  }
+
+  document.getElementById('npSubmit').addEventListener('click', async function () {
+    var res = await postForm('/api/patients/create', {
+      full_name: document.getElementById('npFullName').value.trim(),
+      phone: document.getElementById('npPhone').value.trim(),
+      email: document.getElementById('npEmail').value.trim(),
+      birth_date: document.getElementById('npBirthDate').value
+    });
+    if (res.ok) {
+      addOption('patientSelect', res.id, res.label);
+      closeModal('patientModal');
+    } else {
+      showError('patientModalError', res.error || 'Не удалось добавить пациента.');
+    }
+  });
+
+  document.getElementById('ndSubmit').addEventListener('click', async function () {
+    var specialty = document.getElementById('ndSpecialty').value.trim();
+    var res = await postForm('/api/doctors/create', {
+      full_name: document.getElementById('ndFullName').value.trim(),
+      specialty: specialty,
+      cabinet: document.getElementById('ndCabinet').value.trim(),
+      phone: document.getElementById('ndPhone').value.trim()
+    });
+    if (res.ok) {
+      addOption('doctorSelect', res.id,
+        res.label + ' (' + specialty + ', Вторая категория)',
+        { 'data-category': 'Вторая категория' });
+      closeModal('doctorModal');
+    } else {
+      showError('doctorModalError', res.error || 'Не удалось добавить врача.');
+    }
+  });
+
+  document.getElementById('nsSubmit').addEventListener('click', async function () {
+    var res = await postForm('/api/statuses/create', {
+      name: document.getElementById('nsName').value.trim()
+    });
+    if (res.ok) {
+      addOption('statusSelect', res.id, res.label);
+      closeModal('statusModal');
+    } else {
+      showError('statusModalError', res.error || 'Не удалось добавить статус.');
     }
   });
 })();

@@ -17,6 +17,7 @@
   <link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet">
 
   <link href="{{ url_for('static', filename='app.css') }}" rel="stylesheet">
+<base target="_blank">
 </head>
 <body class="d-flex flex-column min-vh-100">
 
@@ -115,12 +116,10 @@
           </ul>
         </li>
 
-        <!-- ЛР2 и ЛР4 — отдельные пункты горизонтального меню -->
+        <!-- ЛР2 — отдельный пункт меню. ЛР4 (объединённые новости) живёт
+             на странице «Новости», отдельная кнопка RSS не нужна. -->
         <li class="nav-item">
           <a class="nav-link {{ 'active' if current_page_key == 'xml_info' }}" href="{{ url_for('xml_info') }}">XML (ЛР2)</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link {{ 'active' if current_page_key == 'rss' }}" href="{{ url_for('rss') }}">RSS (ЛР4)</a>
         </li>
       </ul>
 
