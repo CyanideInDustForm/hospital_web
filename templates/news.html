@@ -1,30 +1,50 @@
-<!-- templates/news.html — единая страница новостей:
-     свои новости (БД) + внешняя RSS-лента в двух колонках,
-     поиск по новостям, поле замены ленты, экспорт. -->
+<!-- templates/news.html — страница новостей с тремя режимами:
+     all — общие (свои из БД + внешняя RSS-лента),
+     site — только новости сайта из БД,
+     rss — только внешняя RSS-лента.
+     В каждом режиме — поиск; замена ленты — в all/rss;
+     добавление своей новости — в all/site. -->
 {% extends "base.html" %}
 {% block title %}Новости · {{ org_name }}{% endblock %}
 {% block content %}
 
-<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-  <h1 class="h3 mb-0">Новости поликлиники</h1>
-  <a class="btn btn-accent" href="{{ url_for('news_add') }}">+ Добавить новость</a>
+<h1 class="h3 mb-3">Новости поликлиники</h1>
+
+<!-- Переключатель режимов (общие / свои / RSS) -->
+<div class="d-flex flex-wrap gap-2 mb-3">
+  <a class="btn {{ 'btn-accent' if mode=='all' else 'btn-outline-accent' }}"
+     href="{{ url_for('news', mode='all', q=q or none, feed=feed_url) }}">Общие новости</a>
+  <a class="btn {{ 'btn-accent' if mode=='site' else 'btn-outline-accent' }}"
+     href="{{ url_for('news', mode='site', q=q or none) }}">Новости сайта (из БД)</a>
+  <a class="btn {{ 'btn-accent' if mode=='rss' else 'btn-outline-accent' }}"
+     href="{{ url_for('news', mode='rss', q=q or none, feed=feed_url) }}">Новости из RSS-ленты</a>
+  {% if mode in ('all', 'site') %}
+  <a class="btn btn-accent ms-auto" href="{{ url_for('news_add', mode=mode) }}">+ Добавить новость</a>
+  {% endif %}
 </div>
 
 <p class="text-muted">
-  Объединённая лента: слева — новости поликлиники из базы данных сайта,
-  справа — внешняя новостная RSS-лента (её можно заменить).
+  {% if mode == 'all' %}
+  Единая лента: новости поликлиники из базы данных сайта и внешняя новостная
+  RSS-лента (её можно заменить) — вперемешку, свежие новости сверху.
+  {% elif mode == 'site' %}
+  Новости поликлиники из базы данных сайта — их можно добавлять и искать.
+  {% else %}
+  Внешняя новостная RSS/Atom-лента — её можно заменить.
+  {% endif %}
 </p>
 
 <!-- Поиск по новостям (отдельно от общего поиска по сайту) -->
 <div class="card shadow-sm mb-3">
   <div class="card-body">
     <form method="get" action="{{ url_for('news') }}" class="d-flex gap-2 align-items-center flex-wrap" role="search">
+      <input type="hidden" name="mode" value="{{ mode }}">
       <label class="form-label mb-0 fw-semibold">Поиск по новостям:</label>
       <input class="form-control" type="search" name="q" value="{{ q }}"
              placeholder="Слова из заголовка или текста новости" style="max-width: 420px">
-      <input type="hidden" name="feed" value="{{ feed_url }}">
+      {% if mode in ('all', 'rss') %}<input type="hidden" name="feed" value="{{ feed_url }}">{% endif %}
       <button class="btn btn-accent" type="submit">Найти</button>
-      {% if q %}<a class="btn btn-outline-secondary" href="{{ url_for('news') }}">Сбросить</a>{% endif %}
+      {% if q %}<a class="btn btn-outline-secondary" href="{{ url_for('news', mode=mode) }}">Сбросить</a>{% endif %}
     </form>
     {% if q %}
     <div class="small text-muted mt-2">
@@ -34,10 +54,12 @@
   </div>
 </div>
 
-<!-- Поле для замены новостной ленты -->
+<!-- Поле для замены новостной ленты (только режимы с внешней лентой) -->
+{% if mode in ('all', 'rss') %}
 <div class="card shadow-sm mb-4">
   <div class="card-body">
     <form method="get" action="{{ url_for('news') }}" class="d-flex gap-2 align-items-center flex-wrap">
+      <input type="hidden" name="mode" value="{{ mode }}">
       <label class="form-label mb-0 fw-semibold">Новостная лента (RSS/Atom):</label>
       <input class="form-control" type="text" name="feed" value="{{ feed_url }}" style="max-width: 520px">
       {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
@@ -50,10 +72,48 @@
     </div>
   </div>
 </div>
+{% endif %}
 
+{% if mode == 'all' %}
+<!-- Общие новости: единая лента (свои из БД + RSS), свежие сверху -->
+<div class="card shadow-sm">
+  <div class="card-header bg-white fw-semibold">📰 Общая лента: новости сайта + RSS</div>
+  <div class="card-body">
+    {% if feed_error %}
+    <div class="alert alert-warning">
+      Не удалось загрузить внешнюю ленту: <code>{{ feed_error }}</code>.<br>
+      Показаны только новости сайта — проверьте адрес ленты или подключение к интернету.
+    </div>
+    {% endif %}
+    {% for it in merged %}
+    <div class="border-bottom pb-2 mb-2">
+      <div class="text-muted small">
+        {{ it.date }}
+        {% if it.is_rss %}
+        <span class="badge text-bg-info">RSS</span>
+        {% else %}
+        <span class="badge text-bg-secondary">Сайт</span>
+        {% endif %}
+      </div>
+      {% if it.link %}
+      <a href="{{ it.link }}" target="_blank" rel="noopener" class="fw-semibold">{{ it.title }}</a>
+      {% else %}
+      <b>{{ it.title }}</b>
+      {% endif %}
+      {% if it.text %}
+      <p class="mb-0 small text-muted">{{ it.text }}</p>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="text-muted">{% if q %}По запросу ничего не найдено.{% else %}Новостей пока нет.{% endif %}</div>
+    {% endfor %}
+  </div>
+</div>
+{% else %}
 <div class="row g-4">
   <!-- Свои новости из БД -->
-  <div class="col-lg-6">
+  {% if mode == 'site' %}
+  <div class="col-lg-12">
     <div class="card shadow-sm h-100">
       <div class="card-header bg-white fw-semibold">📰 Новости сайта (из базы данных)</div>
       <div class="card-body">
@@ -65,20 +125,24 @@
             <p class="mb-0 small">{{ n.body }}</p>
           </div>
           {% endfor %}
+        {% else %}
+        <div class="text-muted">{% if q %}По запросу ничего не найдено.{% else %}Новостей пока нет — добавьте первую!{% endif %}</div>
         {% endif %}
       </div>
     </div>
   </div>
+  {% endif %}
 
   <!-- Внешняя RSS-лента -->
-  <div class="col-lg-6">
+  {% if mode == 'rss' %}
+  <div class="col-lg-12">
     <div class="card shadow-sm h-100">
       <div class="card-header bg-white fw-semibold">🌐 Внешняя лента: {{ feed_url }}</div>
       <div class="card-body">
         {% if feed_error %}
         <div class="alert alert-warning mb-0">
           Не удалось загрузить ленту: <code>{{ feed_error }}</code>.<br>
-          Проверьте адрес или подключение к интернету — свои новости слева доступны всегда.
+          Проверьте адрес или подключение к интернету — свои новости доступны на вкладке «Новости сайта».
         </div>
         {% elif feed_items %}
           {% for it in feed_items %}
@@ -95,13 +159,16 @@
           </div>
           {% endfor %}
         {% else %}
-        <div class="text-muted">В ленте нет записей.</div>
+        <div class="text-muted">{% if q %}По запросу ничего не найдено.{% else %}В ленте нет записей.{% endif %}</div>
         {% endif %}
       </div>
     </div>
   </div>
+  {% endif %}
 </div>
+{% endif %}
 
+{% if mode in ('all', 'site') %}
 <h2 class="h5 mt-4 mb-2">Форматы обмена данными (экспорт наших новостей)</h2>
 <div class="row g-3">
   <div class="col-md-4">
@@ -132,5 +199,6 @@
     </div>
   </div>
 </div>
+{% endif %}
 
 {% endblock %}

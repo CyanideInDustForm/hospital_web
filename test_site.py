@@ -92,7 +92,8 @@ with open(fixture, "w", encoding="utf-8") as f:
 <pubDate>Mon, 27 Oct 2026 00:00:00 GMT</pubDate><description>Описание тестовой новости</description></item>
 </channel></rss>""")
 
-r = c.get(f"/rss?feed={urllib.parse.quote('file:///' + fixture.replace(os.sep, '/'))}")
+r = c.get(f"/rss?feed={urllib.parse.quote('file:///' + fixture.replace(os.sep, '/'))}",
+          follow_redirects=True)  # /rss теперь редиректит на /news
 check("ЛР4: /rss с заменой ленты", r)
 t = r.get_data(as_text=True)
 assert "Тестовая внешняя новость" in t, "внешняя лента не подключилась"
@@ -102,7 +103,7 @@ own = sqlite3.connect("data/site.sqlite3").execute("SELECT title FROM news LIMIT
 assert own and own[0] in t, "свои новости не показаны"
 print("OK  ЛР4: свои новости из БД рядом с внешней лентой")
 
-r = c.get("/rss")  # дефолтная лента — может быть недоступна офлайн, страница всё равно 200
+r = c.get("/rss", follow_redirects=True)  # дефолтная лента — может быть недоступна офлайн, страница всё равно 200
 check("ЛР4: /rss (лента по умолчанию)", r)
 os.remove(fixture)
 

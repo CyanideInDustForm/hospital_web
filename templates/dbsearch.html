@@ -151,11 +151,11 @@
     <form method="get" action="{{ url_for('db_search') }}" class="row g-2">
       <input type="hidden" name="mode" value="two">
 
-      <div class="col-md-6">
-        <label class="form-label">Пациент</label>
+      <div class="col-md-4">
+        <label class="form-label">Пациент (необязательно)</label>
         <div class="input-group">
           <select class="form-select" name="patient_id" id="cascadePatient">
-            <option value="">(выберите)</option>
+            <option value="">(любой)</option>
             {% for p in patients %}
             <option value="{{ p.id }}" {% if request.args.get('patient_id') == p.id|string %}selected{% endif %}>
               {{ p.full_name }}
@@ -165,8 +165,8 @@
         </div>
       </div>
 
-      <div class="col-md-6">
-        <label class="form-label">Дата приёма</label>
+      <div class="col-md-4">
+        <label class="form-label">Дата приёма (точно)</label>
         <div class="input-group">
           <select class="form-select" name="visit_datetime" id="cascadeVisit">
             <option value="">(сначала выберите пациента)</option>
@@ -177,6 +177,21 @@
             {% endfor %}
           </select>
         </div>
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">Дата приёма от</label>
+        <input class="form-control" type="date" name="date_from"
+               value="{{ request.args.get('date_from','') }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Дата приёма до</label>
+        <input class="form-control" type="date" name="date_to"
+               value="{{ request.args.get('date_to','') }}">
+      </div>
+
+      <div class="col-12">
+        <small class="text-muted">Можно выбрать пациента, точную дату приёма или диапазон дат («от» и «до»).</small>
       </div>
 
       <div class="col-12">

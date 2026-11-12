@@ -21,7 +21,8 @@ import sqlite3
 import urllib.request
 import xml.etree.ElementTree as ET
 import xml.dom.minidom
-from datetime import datetime, date
+from datetime import datetime, date, timezone
+from email.utils import parsedate_to_datetime
 from functools import wraps
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -487,41 +488,90 @@ def create_app() -> Flask:
     #  в двух местах, поиск по новостям — отдельно на этой странице.
     # ==================================================================
 
+    def parse_news_date(value: str) -> datetime:
+        """Дата новости в произвольном формате (ISO, RFC-822) → naive datetime для сортировки."""
+        value = (value or "").strip()
+        for parser in (lambda v: datetime.fromisoformat(v.replace("Z", "+00:00")),
+                       parsedate_to_datetime):
+            try:
+                dt = parser(value)
+            except (ValueError, TypeError):
+                continue
+            if dt.tzinfo is not None:
+                dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+            return dt
+        return datetime.min
+
     @app.get("/news")
     def news():
+        # Три режима: all — общие (свои из БД + RSS), site — только свои,
+        # rss — только внешняя лента (правка преподавателя)
+        mode = (request.args.get("mode") or "all").strip()
+        if mode not in ("all", "site", "rss"):
+            mode = "all"
+
         # Поиск по новостям (по заголовку и тексту, все слова запроса)
         q = (request.args.get("q") or "").strip()
-        sql = "SELECT id, title, body, published_at FROM news"
-        params: List[Any] = []
         words = [w.lower() for w in q.split() if len(w) >= 2]
-        if q and words:
-            conds = []
-            for w in words:
-                conds.append("(lower(title) LIKE ? OR lower(body) LIKE ?)")
-                params.extend([f"%{w}%", f"%{w}%"])
-            sql += " WHERE " + " AND ".join(conds)
-        sql += " ORDER BY published_at DESC, id DESC;"
-        items = get_site_db().execute(sql, tuple(params)).fetchall()
+
+        items = []
+        if mode in ("all", "site"):
+            sql = "SELECT id, title, body, published_at FROM news"
+            params: List[Any] = []
+            if q and words:
+                conds = []
+                for w in words:
+                    conds.append("(lower(title) LIKE ? OR lower(body) LIKE ?)")
+                    params.extend([f"%{w}%", f"%{w}%"])
+                sql += " WHERE " + " AND ".join(conds)
+            sql += " ORDER BY published_at DESC, id DESC;"
+            items = get_site_db().execute(sql, tuple(params)).fetchall()
 
         # Внешняя лента с полем замены (п. 6 правок преподавателя)
         feed_url = (request.args.get("feed") or "").strip() or DEFAULT_RSS_FEED
-        feed_items, feed_error = fetch_rss_items(feed_url)
+        feed_items: List[Dict[str, str]] = []
+        feed_error = None
+        if mode in ("all", "rss"):
+            feed_items, feed_error = fetch_rss_items(feed_url)
 
-        # Поиск распространяется и на внешнюю ленту: оставляем только
-        # новости, где все слова запроса встречаются в заголовке или описании
-        if q and words and feed_items:
-            feed_items = [
-                it for it in feed_items
-                if all(w in (it["title"] + " " + it["description"]).lower() for w in words)
-            ]
+            # Поиск распространяется и на внешнюю ленту: оставляем только
+            # новости, где все слова запроса встречаются в заголовке или описании
+            if q and words and feed_items:
+                feed_items = [
+                    it for it in feed_items
+                    if all(w in (it["title"] + " " + it["description"]).lower() for w in words)
+                ]
+
+        # Режим «all»: единая лента — свои новости и RSS вперемешку, свежие сверху
+        merged: List[Dict[str, Any]] = []
+        if mode == "all":
+            for n in items:
+                merged.append({
+                    "title": n["title"],
+                    "text": n["body"],
+                    "date": n["published_at"],
+                    "link": "",
+                    "is_rss": False,
+                })
+            for it in feed_items:
+                merged.append({
+                    "title": it["title"],
+                    "text": it["description"],
+                    "date": it["date"],
+                    "link": it["link"],
+                    "is_rss": True,
+                })
+            merged.sort(key=lambda it: parse_news_date(it["date"]), reverse=True)
 
         return render_template(
             "news.html",
             news=items,
             q=q,
+            mode=mode,
             feed_url=feed_url,
             feed_items=feed_items,
             feed_error=feed_error,
+            merged=merged,
         )
 
     @app.route("/news/add", methods=["GET", "POST"])
@@ -536,7 +586,10 @@ def create_app() -> Flask:
                 )
                 get_site_db().commit()
                 flash("Новость добавлена.", "success")
-                return redirect(url_for("news"))
+                back_mode = request.form.get("mode") or "site"
+                if back_mode not in ("all", "site"):
+                    back_mode = "site"
+                return redirect(url_for("news", mode=back_mode))
             except sqlite3.IntegrityError as e:
                 flash(f"Ошибка БД: {e}", "danger")
         return render_template("news_add.html")
@@ -1057,10 +1110,14 @@ def create_app() -> Flask:
         elif mode == "two":
             patient_id = (request.args.get("patient_id") or "").strip()
             visit_dt = (request.args.get("visit_datetime") or "").strip()
+            date_from = (request.args.get("date_from") or "").strip()
+            date_to = (request.args.get("date_to") or "").strip()
             meta["patient_id"] = patient_id
             meta["visit_datetime"] = visit_dt
+            meta["date_from"] = date_from
+            meta["date_to"] = date_to
 
-            if patient_id:
+            if patient_id or (date_from and date_to):
                 sql = """
                     SELECT
                       p.full_name AS patient_name,
@@ -1070,20 +1127,29 @@ def create_app() -> Flask:
                     FROM appointments a
                     JOIN patients p ON p.id = a.patient_id
                     JOIN doctors d ON d.id = a.doctor_id
-                    WHERE a.patient_id = ?
                 """
-                params: List[Any] = [int(patient_id)]
-                if visit_dt:
-                    sql += " AND a.visit_datetime = ?"
+                where = []
+                params: List[Any] = []
+                if patient_id:
+                    where.append("a.patient_id = ?")
+                    params.append(int(patient_id))
+                if visit_dt and patient_id:
+                    where.append("a.visit_datetime = ?")
                     params.append(dt_local_to_sqlite(visit_dt))
+                if date_from and date_to:
+                    where.append("date(a.visit_datetime) BETWEEN ? AND ?")
+                    params.extend([date_from, date_to])
+                if where:
+                    sql += " WHERE " + " AND ".join(where)
                 sql += " ORDER BY a.visit_datetime DESC LIMIT 200;"
                 results = query_all(sql, tuple(params))
 
-                visits = [r["visit_datetime"] for r in query_all(
-                    "SELECT visit_datetime FROM appointments WHERE patient_id = ? "
-                    "ORDER BY visit_datetime DESC;",
-                    (int(patient_id),),
-                )]
+                if patient_id:
+                    visits = [r["visit_datetime"] for r in query_all(
+                        "SELECT visit_datetime FROM appointments WHERE patient_id = ? "
+                        "ORDER BY visit_datetime DESC;",
+                        (int(patient_id),),
+                    )]
 
         elif mode == "agg":
             results = query_all("""
