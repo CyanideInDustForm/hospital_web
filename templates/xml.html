@@ -1,21 +1,22 @@
-<!-- templates/xml.html — ЛР2: собственный XML-файл, визуализация JS-таблицей -->
+<!-- templates/xml.html — прейскурант услуг в формате XML, визуализация JS-таблицей -->
 {% extends "base.html" %}
-{% block title %}XML (ЛР2) — Прейскурант · {{ org_name }}{% endblock %}
+{% block title %}Прейскурант (XML) · {{ org_name }}{% endblock %}
 {% block content %}
 
-<h1 class="h3 mb-2">Лабораторная работа № 2 — XML + JS</h1>
+<h1 class="h3 mb-2">Прейскурант услуг (XML)</h1>
 <p class="text-muted">
-  Собственный XML-файл <code>static/data/pricelist.xml</code> (теги:
+  Прейскурант услуг поликлиники в формате XML — файл
+  <code>static/data/pricelist.xml</code> (теги:
   <code>услуги</code>, <code>услуга</code>, <code>название</code>, <code>отделение</code>,
-  <code>категория</code>, <code>цена</code>, <code>срок</code> — 7 тегов, 19 объектов).
-  Таблица строится средствами JavaScript: <b>поиск по символам</b> и
+  <code>категория</code>, <code>цена</code>, <code>срок</code>).
+  Таблица строится средствами JavaScript: работают <b>поиск по символам</b> и
   <b>сортировка по любой колонке</b> (клик по заголовку).
 </p>
 
 <div class="d-flex gap-2 align-items-center mb-3">
   <input class="form-control" id="xmlSearch" type="search" placeholder="Поиск по символам, например: «карди»…" style="max-width: 420px">
   <span class="text-muted small" id="xmlCount"></span>
-  <a class="btn btn-sm btn-outline-secondary ms-auto" href="{{ url_for('static', filename='data/pricelist.xml') }}" target="_blank">Открыть XML-файл</a>
+  <a class="btn btn-sm btn-outline-secondary ms-auto" href="{{ url_for('static', filename='data/pricelist.xml') }}">Открыть XML-файл</a>
 </div>
 
 <div class="card shadow-sm">
@@ -44,7 +45,7 @@
       <div class="card-body">
         <b>Новости поликлиники</b>
         <p class="small text-muted mb-2">Формируется сервером из таблицы <code>news</code>.</p>
-        <a class="btn btn-sm btn-accent" href="{{ url_for('xml_news') }}" target="_blank">/xml/news</a>
+        <a class="btn btn-sm btn-accent" href="{{ url_for('xml_news') }}">/xml/news</a>
       </div>
     </div>
   </div>
@@ -53,7 +54,7 @@
       <div class="card-body">
         <b>Записи на приём</b>
         <p class="small text-muted mb-2">Формируется сервером из таблицы <code>appointments</code>.</p>
-        <a class="btn btn-sm btn-accent" href="{{ url_for('xml_appointments') }}" target="_blank">/xml/appointments</a>
+        <a class="btn btn-sm btn-accent" href="{{ url_for('xml_appointments') }}">/xml/appointments</a>
       </div>
     </div>
   </div>
@@ -63,7 +64,7 @@
 
 {% block scripts %}
 <script>
-// --- ЛР2: загрузка XML, построение таблицы, поиск по символам, сортировка ---
+// --- загрузка XML, построение таблицы, поиск по символам, сортировка ---
 (function () {
   var rows = [];          // массив объектов из XML
   var sortCol = null, sortAsc = true;

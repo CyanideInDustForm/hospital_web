@@ -120,9 +120,9 @@ print("OK  ЛР4: XML-лента валидна")
 
 # ========== 5. Меню ==========
 t = c.get("/").get_data(as_text=True)
-for needle in ["XML (ЛР2)", "RSS (ЛР4)", "Приложение к БД", "Статистика и диаграммы"]:
+for needle in ["XML-прейскурант", "Приложение к БД", "Статистика и диаграммы"]:
     assert needle in t, f"в меню нет: {needle}"
-print("OK  ЛР2 и ЛР4 — пункты горизонтального меню")
+print("OK  пункты горизонтального меню")
 
 # ========== 6. Регистрация → пациент ==========
 REG = {"username": "petrov_test", "password": "secret123", "password2": "secret123",

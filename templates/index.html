@@ -69,6 +69,7 @@
               <label class="form-label">Статус</label>
               <div class="input-group">
                 <select class="form-select" name="status_id" id="statusSelect" required>
+                  <option value="" selected disabled>Выберите...</option>
                   {% for s in statuses %}
                     <option value="{{ s.id }}">{{ s.name }}</option>
                   {% endfor %}
@@ -80,6 +81,7 @@
             <div class="col-md-6">
               <label class="form-label">Оплата</label>
               <select class="form-select" name="payment_type_id" required>
+                <option value="" selected disabled>Выберите...</option>
                 {% for pt in payment_types %}
                   <option value="{{ pt.id }}">{{ pt.name }}</option>
                 {% endfor %}
@@ -185,7 +187,7 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Новый пациент</h5>
+        <h2 class="modal-title fs-5">Новый пациент</h2>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
@@ -219,7 +221,7 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Новый врач</h5>
+        <h2 class="modal-title fs-5">Новый врач</h2>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
@@ -254,7 +256,7 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Новый статус записи</h5>
+        <h2 class="modal-title fs-5">Новый статус записи</h2>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
