@@ -512,16 +512,20 @@ def create_app() -> Flask:
 
         items = []
         if mode in ("all", "site"):
-            sql = "SELECT id, title, body, published_at FROM news"
-            params: List[Any] = []
+            # Фильтрацию делаем в Python, а не через lower()/LIKE в SQL:
+            # SQLite без ICU приводит к нижнему регистру и сравнивает
+            # без учёта регистра только латиницу, поэтому «Лечение» не
+            # находится по запросу «лечение».
+            rows = get_site_db().execute(
+                "SELECT id, title, body, published_at FROM news "
+                "ORDER BY published_at DESC, id DESC;"
+            ).fetchall()
             if q and words:
-                conds = []
-                for w in words:
-                    conds.append("(lower(title) LIKE ? OR lower(body) LIKE ?)")
-                    params.extend([f"%{w}%", f"%{w}%"])
-                sql += " WHERE " + " AND ".join(conds)
-            sql += " ORDER BY published_at DESC, id DESC;"
-            items = get_site_db().execute(sql, tuple(params)).fetchall()
+                rows = [
+                    n for n in rows
+                    if all(w in (n["title"] + " " + n["body"]).lower() for w in words)
+                ]
+            items = rows
 
         # Внешняя лента с полем замены (п. 6 правок преподавателя)
         feed_url = (request.args.get("feed") or "").strip() or DEFAULT_RSS_FEED
