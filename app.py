@@ -601,6 +601,7 @@ def create_app() -> Flask:
         results: List[Dict[str, str]] = []
 
         if q:
+            # 1) Поиск по статичным страницам сайта
             for key, page in SITE_PAGES.items():
                 text_lower = page["text"].lower()
                 if all(w in text_lower for w in words):
@@ -611,6 +612,25 @@ def create_app() -> Flask:
                     snippet = ("…" if start > 0 else "") + page["text"][start:start + 220] + "…"
                     results.append({"title": page["title"], "url": page["url"],
                                     "snippet": snippet})
+
+            # 2) Поиск по новостям из базы данных сайта
+            news_rows = get_site_db().execute(
+                "SELECT id, title, body, published_at FROM news "
+                "ORDER BY published_at DESC, id DESC;"
+            ).fetchall()
+            for n in news_rows:
+                text_lower = (n["title"] + " " + n["body"]).lower()
+                if all(w in text_lower for w in words):
+                    body_lower = n["body"].lower()
+                    pos = min((body_lower.find(w) for w in words if w in body_lower),
+                              default=0)
+                    start = max(0, pos - 60)
+                    snippet = ("…" if start > 0 else "") + n["body"][start:start + 220] + "…"
+                    results.append({
+                        "title": f"📰 {n['title']}",
+                        "url": url_for("news"),
+                        "snippet": f"{n['published_at']} · {snippet}",
+                    })
 
         return render_template("site_search.html", q=q, results=results)
 
