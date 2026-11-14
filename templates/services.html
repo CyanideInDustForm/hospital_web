@@ -16,7 +16,7 @@
       <div class="card-body" id="weatherWidget">
         <div class="text-muted">Загрузка прогноза…</div>
       </div>
-      <div class="card-footer small text-muted">Источник: open-meteo.com</div>
+      <div class="card-footer small text-muted">Источник: wttr.in</div>
     </div>
   </div>
 
@@ -119,33 +119,25 @@
 
 {% block scripts %}
 <script>
-// --- Виджет погоды (open-meteo, без ключа) ---
+// --- Виджет погоды (wttr.in, без ключа, работает без VPN) ---
 (function () {
   var el = document.getElementById('weatherWidget');
   if (!el) return;
-  var url = 'https://api.open-meteo.com/v1/forecast'
-    + '?latitude=55.0968&longitude=36.6127'
-    + '&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code'
-    + '&timezone=Europe%2FMoscow';
+  var url = 'https://wttr.in/55.0968,36.6127?format=j1&lang=ru';
 
   fetch(url)
     .then(function (r) { return r.json(); })
     .then(function (data) {
-      var c = data.current;
-      var codes = {
-        0: 'Ясно', 1: 'Преимущественно ясно', 2: 'Переменная облачность', 3: 'Пасмурно',
-        45: 'Туман', 48: 'Туман с изморозью',
-        51: 'Лёгкая морось', 53: 'Морось', 55: 'Сильная морось',
-        61: 'Небольшой дождь', 63: 'Дождь', 65: 'Сильный дождь',
-        71: 'Небольшой снег', 73: 'Снег', 75: 'Сильный снег',
-        80: 'Ливень', 95: 'Гроза'
-      };
-      var desc = codes[c.weather_code] || ('Код погоды ' + c.weather_code);
+      var c = data.current_condition[0];
+      var desc = (c.lang_ru && c.lang_ru[0] && c.lang_ru[0].value)
+        || c.weatherDesc[0].value;
+      var t = parseFloat(c.temp_C);
+      var windMs = parseFloat(c.windspeedKmph) / 3.6;
       el.innerHTML =
-        '<div class="display-6 fw-bold">' + c.temperature_2m.toFixed(1) + ' °C</div>' +
+        '<div class="display-6 fw-bold">' + (isNaN(t) ? c.temp_C : t.toFixed(1)) + ' °C</div>' +
         '<div class="fs-5">' + desc + '</div>' +
-        '<div class="text-muted mt-2">Влажность: ' + c.relative_humidity_2m + ' %<br>' +
-        'Ветер: ' + c.wind_speed_10m.toFixed(1) + ' м/с</div>';
+        '<div class="text-muted mt-2">Влажность: ' + c.humidity + ' %<br>' +
+        'Ветер: ' + windMs.toFixed(1) + ' м/с</div>';
     })
     .catch(function () {
       el.innerHTML = '<div class="text-muted">Не удалось загрузить прогноз погоды ' +

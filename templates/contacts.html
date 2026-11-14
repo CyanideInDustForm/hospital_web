@@ -70,12 +70,9 @@
       function (pos) {
         var lat = pos.coords.latitude, lon = pos.coords.longitude;
         if (userMarker) { map.removeLayer(userMarker); }
-        userMarker = L.marker([lat, lon], {
-            icon: L.icon({
-              iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
-              shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-              iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
-            })
+        userMarker = L.circleMarker([lat, lon], {
+            radius: 9, color: '#ffffff', weight: 2,
+            fillColor: '#198754', fillOpacity: 0.95
           }).addTo(map)
           .bindPopup('<b>Вы здесь</b><br>широта: ' + lat.toFixed(5) + '<br>долгота: ' + lon.toFixed(5))
           .openPopup();
@@ -83,9 +80,15 @@
         status.textContent = 'Ваше местоположение отмечено на карте.';
       },
       function (err) {
-        status.textContent = 'Не удалось определить местоположение: ' + err.message;
+        var hints = {
+          1: 'доступ запрещён — разрешите геолокацию для этого сайта в настройках браузера.',
+          2: 'позиция недоступна (выключена служба геолокации в системе?).',
+          3: 'время ожидания истекло — попробуйте ещё раз.'
+        };
+        status.textContent = 'Не удалось определить местоположение: ' +
+          (hints[err.code] || err.message);
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
     );
   });
 })();

@@ -1,0 +1,14 @@
+# Конфигурация деплоя на Amvera Cloud (https://amvera.ru)
+# Flask-приложение запускается через gunicorn, порт 80 внутри контейнера.
+meta:
+  environment: python
+  toolchain:
+    name: pip
+    version: 3.12
+
+build:
+  requirementsPath: requirements.txt
+
+run:
+  command: gunicorn --bind 0.0.0.0:80 app:app
+  containerPort: 80
