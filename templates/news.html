@@ -60,6 +60,7 @@
   <div class="card-body">
     <form method="get" action="{{ url_for('news') }}" class="d-flex gap-2 align-items-center flex-wrap">
       <input type="hidden" name="mode" value="{{ mode }}">
+      <input type="hidden" name="feedset" value="1">
       <label class="form-label mb-0 fw-semibold">Новостная лента (RSS/Atom):</label>
       <input class="form-control" type="text" name="feed" value="{{ feed_url }}" style="max-width: 520px">
       {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
@@ -74,17 +75,23 @@
 </div>
 {% endif %}
 
+{# Постоянный блок о состоянии ленты: зелёный при успехе, жёлтый при ошибке #}
+{% if mode in ('all', 'rss') %}
+  {% if feed_ok %}
+  <div class="alert alert-success">{{ feed_ok }}</div>
+  {% elif feed_error %}
+  <div class="alert alert-warning">
+    Внешняя лента сейчас недоступна. Новости поликлиники при этом продолжают работать.
+    <div class="small mt-1">Детали: <code>{{ feed_error }}</code></div>
+  </div>
+  {% endif %}
+{% endif %}
+
 {% if mode == 'all' %}
 <!-- Общие новости: единая лента (свои из БД + RSS), свежие сверху -->
 <div class="card shadow-sm">
   <div class="card-header bg-white fw-semibold">📰 Общая лента: новости сайта + RSS</div>
   <div class="card-body">
-    {% if feed_error %}
-    <div class="alert alert-warning">
-      Не удалось загрузить внешнюю ленту: <code>{{ feed_error }}</code>.<br>
-      Показаны только новости сайта — проверьте адрес ленты или подключение к интернету.
-    </div>
-    {% endif %}
     {% for it in merged %}
     <div class="border-bottom pb-2 mb-2">
       <div class="text-muted small">
@@ -139,12 +146,7 @@
     <div class="card shadow-sm h-100">
       <div class="card-header bg-white fw-semibold">🌐 Внешняя лента: {{ feed_url }}</div>
       <div class="card-body">
-        {% if feed_error %}
-        <div class="alert alert-warning mb-0">
-          Не удалось загрузить ленту: <code>{{ feed_error }}</code>.<br>
-          Проверьте адрес или подключение к интернету — свои новости доступны на вкладке «Новости сайта».
-        </div>
-        {% elif feed_items %}
+        {% if feed_items %}
           {% for it in feed_items %}
           <div class="border-bottom pb-2 mb-2">
             <div class="text-muted small">{{ it.date }}</div>

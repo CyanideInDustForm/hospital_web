@@ -37,36 +37,57 @@
 
       {% if meta.entity == 'patients' %}
       <div class="col-md-3">
-        <label class="form-label">ФИО начинается с</label>
+        <label class="form-label">ФИО</label>
         <div class="input-group">
-          <input class="form-control" name="full_name_prefix"
-                 value="{{ request.args.get('full_name_prefix','') }}">
+          <select class="form-select" name="full_name">
+            <option value="">(любой)</option>
+            {% for p in patient_names %}
+            <option value="{{ p.full_name }}" {% if request.args.get('full_name') == p.full_name %}selected{% endif %}>
+              {{ p.full_name }}
+            </option>
+            {% endfor %}
+          </select>
         </div>
       </div>
       <div class="col-md-3">
-        <label class="form-label">Телефон содержит</label>
+        <label class="form-label">Телефон</label>
         <div class="input-group">
-          <input class="form-control" name="phone_contains"
-                 value="{{ request.args.get('phone_contains','') }}">
+          <select class="form-select" name="phone">
+            <option value="">(любой)</option>
+            {% for p in phones %}
+            <option value="{{ p.phone }}" {% if request.args.get('phone') == p.phone %}selected{% endif %}>
+              {{ p.phone }}
+            </option>
+            {% endfor %}
+          </select>
         </div>
       </div>
       <div class="col-md-3">
-        <label class="form-label">Дата рождения от</label>
-        <input class="form-control" type="date" name="birth_date_from"
-               value="{{ request.args.get('birth_date_from','') }}" min="1920-01-01" max="{{ today }}">
-      </div>
-      <div class="col-md-3">
-        <label class="form-label">Дата рождения до</label>
-        <input class="form-control" type="date" name="birth_date_to"
-               value="{{ request.args.get('birth_date_to','') }}" min="1920-01-01" max="{{ today }}">
+        <label class="form-label">Дата рождения</label>
+        <div class="input-group">
+          <select class="form-select" name="birth_date">
+            <option value="">(любая)</option>
+            {% for b in birth_dates %}
+            <option value="{{ b.birth_date }}" {% if request.args.get('birth_date') == b.birth_date %}selected{% endif %}>
+              {{ b.birth_date }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
       </div>
 
       {% elif meta.entity == 'doctors' %}
       <div class="col-md-3">
-        <label class="form-label">ФИО начинается с</label>
+        <label class="form-label">ФИО</label>
         <div class="input-group">
-          <input class="form-control" name="full_name_prefix"
-                 value="{{ request.args.get('full_name_prefix','') }}">
+          <select class="form-select" name="full_name">
+            <option value="">(любой)</option>
+            {% for d in doctor_names %}
+            <option value="{{ d.full_name }}" {% if request.args.get('full_name') == d.full_name %}selected{% endif %}>
+              {{ d.full_name }}
+            </option>
+            {% endfor %}
+          </select>
         </div>
       </div>
       <div class="col-md-3">
@@ -124,17 +145,24 @@
         </div>
       </div>
       <div class="col-md-3">
-        <label class="form-label">Приём от</label>
-        <input class="form-control" type="datetime-local" name="visit_from"
-               value="{{ request.args.get('visit_from','') }}" min="{{ min_visit_dt }}" max="{{ max_visit_dt }}">
-      </div>
-      <div class="col-md-3">
-        <label class="form-label">Приём до</label>
-        <input class="form-control" type="datetime-local" name="visit_to"
-               value="{{ request.args.get('visit_to','') }}" min="{{ min_visit_dt }}" max="{{ max_visit_dt }}">
+        <label class="form-label">Дата приёма</label>
+        <div class="input-group">
+          <select class="form-select" name="visit_datetime">
+            <option value="">(любая)</option>
+            {% for v in visit_datetimes %}
+            <option value="{{ v.visit_datetime }}" {% if request.args.get('visit_datetime') == v.visit_datetime %}selected{% endif %}>
+              {{ v.visit_datetime }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
       </div>
 
       {% endif %}
+
+      <div class="col-12">
+        <small class="text-muted">Все критерии — выпадающие списки со значениями из базы: выбранный вариант всегда даёт результат.</small>
+      </div>
 
       <div class="col-12">
         <button class="btn btn-accent">Найти</button>

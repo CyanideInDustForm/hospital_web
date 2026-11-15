@@ -527,12 +527,19 @@ def create_app() -> Flask:
                 ]
             items = rows
 
-        # Внешняя лента с полем замены (п. 6 правок преподавателя)
-        feed_url = (request.args.get("feed") or "").strip() or DEFAULT_RSS_FEED
+        # Внешняя лента с полем замены (п. 6 правок преподавателя).
+        # Выбранная лента запоминается в сессии: при переключении вкладок
+        # (общие/сайт/rss) лента не сбрасывается на ленту по умолчанию,
+        # а при замене ленты показывается сообщение о подключении.
+        feed_param = (request.args.get("feed") or "").strip()
+        if feed_param:
+            session["rss_feed"] = feed_param
+        feed_url = feed_param or session.get("rss_feed") or DEFAULT_RSS_FEED
         feed_items: List[Dict[str, str]] = []
         feed_error = None
+        feed_title = ""
         if mode in ("all", "rss"):
-            feed_items, feed_error = fetch_rss_items(feed_url)
+            feed_items, feed_error, feed_title = fetch_rss_items(feed_url)
 
             # Поиск распространяется и на внешнюю ленту: оставляем только
             # новости, где все слова запроса встречаются в заголовке или описании
@@ -541,6 +548,23 @@ def create_app() -> Flask:
                     it for it in feed_items
                     if all(w in (it["title"] + " " + it["description"]).lower() for w in words)
                 ]
+
+            # Тост при каждом явном нажатии «Заменить ленту» (маркер feedset
+            # в форме ленты, чтобы поиск/вкладки не вызывали тост повторно):
+            # либо успех, либо предупреждение (текст совпадает с блоком на странице)
+            if feed_param and request.args.get("feedset") == "1":
+                if feed_error:
+                    flash("Внешняя лента сейчас недоступна. "
+                          "Новости поликлиники при этом продолжают работать.", "warning")
+                else:
+                    where = f'RSS-лента «{feed_title}»' if feed_title else "RSS-лента"
+                    flash(f"{where} подключена ({feed_param})", "success")
+
+        # Постоянный цветной блок о состоянии ленты (серверный HTML,
+        # не зависит от JS): зелёный при успехе, жёлтый при ошибке
+        feed_ok = None
+        if mode in ("all", "rss") and not feed_error:
+            feed_ok = f"Внешняя лента {feed_url} успешно загружена."
 
         # Режим «all»: единая лента — свои новости и RSS вперемешку, свежие сверху
         merged: List[Dict[str, Any]] = []
@@ -571,6 +595,7 @@ def create_app() -> Flask:
             feed_url=feed_url,
             feed_items=feed_items,
             feed_error=feed_error,
+            feed_ok=feed_ok,
             merged=merged,
         )
 
@@ -744,8 +769,8 @@ def create_app() -> Flask:
     #  ЛР4 — ОБМЕН ДАННЫМИ: объединённые новости (свои + внешняя RSS)
     # ==================================================================
 
-    def fetch_rss_items(feed_url: str, limit: int = 10) -> Tuple[List[Dict[str, str]], Optional[str]]:
-        """Скачивает RSS/Atom-ленту и возвращает (элементы, ошибка)."""
+    def fetch_rss_items(feed_url: str, limit: int = 10) -> Tuple[List[Dict[str, str]], Optional[str], str]:
+        """Скачивает RSS/Atom-ленту и возвращает (элементы, ошибка, название канала)."""
         items: List[Dict[str, str]] = []
         try:
             req = urllib.request.Request(
@@ -761,6 +786,8 @@ def create_app() -> Flask:
                 return (child.text or "").strip() if child is not None and child.text else ""
 
             # RSS 2.0: rss > channel > item
+            channel = root.find("channel")
+            channel_title = (channel.findtext("title") or "").strip() if channel is not None else ""
             for item in root.iter("item"):
                 items.append({
                     "title": text_of(item, "title") or "(без заголовка)",
@@ -772,6 +799,7 @@ def create_app() -> Flask:
             # Atom: feed > entry
             if not items:
                 ns = {"a": "http://www.w3.org/2005/Atom"}
+                channel_title = (root.findtext("a:title", "", ns) or "").strip()
                 for entry in root.findall("a:entry", ns):
                     link_el = entry.find("a:link", ns)
                     items.append({
@@ -782,9 +810,15 @@ def create_app() -> Flask:
                                               entry.findtext("a:summary", "", ns) or "")[:300],
                         "source": feed_url,
                     })
-            return items[:limit], None
+            if not items:
+                # Некоторые сайты на неверный адрес отвечают редиректом на
+                # страницу ошибки с HTTP 200 и валидным, но пустым RSS —
+                # считаем такой ответ ошибкой, а не успешным подключением.
+                return [], ("Лента не содержит записей — проверьте адрес: "
+                            "сервер мог ответить страницей ошибки с кодом 200."), channel_title
+            return items[:limit], None, channel_title
         except Exception as e:  # сеть, XML, таймаут — показываем ошибку на странице
-            return [], str(e)
+            return [], str(e), ""
 
     @app.get("/rss")
     def rss():
@@ -1023,34 +1057,44 @@ def create_app() -> Flask:
         cabinets = query_all("SELECT DISTINCT cabinet FROM doctors ORDER BY cabinet;")
         visits: List[str] = []
 
+        # Значения для выпадающих списков поиска по одной таблице
+        # (правка преподавателя: поиск только через выпадающие меню,
+        # чтобы выбранное значение всегда давало результат)
+        patient_names = query_all(
+            "SELECT DISTINCT full_name FROM patients ORDER BY full_name;")
+        phones = query_all(
+            "SELECT DISTINCT phone FROM patients "
+            "WHERE phone IS NOT NULL AND phone != '' ORDER BY phone;")
+        birth_dates = query_all(
+            "SELECT DISTINCT birth_date FROM patients "
+            "WHERE birth_date IS NOT NULL ORDER BY birth_date DESC;")
+        doctor_names = query_all(
+            "SELECT DISTINCT full_name FROM doctors ORDER BY full_name;")
+        visit_datetimes = query_all(
+            "SELECT DISTINCT visit_datetime FROM appointments "
+            "ORDER BY visit_datetime DESC;")
+
         if mode == "one":
             entity = request.args.get("entity", "patients")
             meta["entity"] = entity
 
             if entity == "patients":
-                full_name_prefix = (request.args.get("full_name_prefix") or "").strip()
-                phone_contains = (request.args.get("phone_contains") or "").strip()
-                bd_from = (request.args.get("birth_date_from") or "").strip()
-                bd_to = (request.args.get("birth_date_to") or "").strip()
+                full_name = (request.args.get("full_name") or "").strip()
+                phone = (request.args.get("phone") or "").strip()
+                birth_date = (request.args.get("birth_date") or "").strip()
 
                 where = []
                 params: List[Any] = []
 
-                if full_name_prefix:
-                    where.append("full_name LIKE ?")
-                    params.append(full_name_prefix + "%")
-                if phone_contains:
-                    where.append("phone LIKE ?")
-                    params.append("%" + phone_contains + "%")
-                if bd_from and bd_to:
-                    where.append("birth_date BETWEEN ? AND ?")
-                    params.extend([bd_from, bd_to])
-                elif bd_from:
-                    where.append("birth_date >= ?")
-                    params.append(bd_from)
-                elif bd_to:
-                    where.append("birth_date <= ?")
-                    params.append(bd_to)
+                if full_name:
+                    where.append("full_name = ?")
+                    params.append(full_name)
+                if phone:
+                    where.append("phone = ?")
+                    params.append(phone)
+                if birth_date:
+                    where.append("birth_date = ?")
+                    params.append(birth_date)
 
                 sql = "SELECT id, full_name, phone, email, birth_date FROM patients"
                 if where:
@@ -1060,16 +1104,16 @@ def create_app() -> Flask:
                 results = query_all(sql, tuple(params))
 
             elif entity == "doctors":
-                full_name_prefix = (request.args.get("full_name_prefix") or "").strip()
+                full_name = (request.args.get("full_name") or "").strip()
                 specialty = (request.args.get("specialty") or "").strip()
                 cabinet = (request.args.get("cabinet") or "").strip()
 
                 where = []
                 params: List[Any] = []
 
-                if full_name_prefix:
-                    where.append("full_name LIKE ?")
-                    params.append(full_name_prefix + "%")
+                if full_name:
+                    where.append("full_name = ?")
+                    params.append(full_name)
                 if specialty:
                     where.append("specialty = ?")
                     params.append(specialty)
@@ -1087,8 +1131,7 @@ def create_app() -> Flask:
             elif entity == "appointments":
                 status_id = (request.args.get("status_id") or "").strip()
                 payment_type_id = (request.args.get("payment_type_id") or "").strip()
-                dt_from = (request.args.get("visit_from") or "").strip()
-                dt_to = (request.args.get("visit_to") or "").strip()
+                visit_dt = (request.args.get("visit_datetime") or "").strip()
 
                 where = []
                 params: List[Any] = []
@@ -1099,10 +1142,9 @@ def create_app() -> Flask:
                 if payment_type_id:
                     where.append("a.payment_type_id = ?")
                     params.append(int(payment_type_id))
-                if dt_from and dt_to:
-                    where.append("a.visit_datetime BETWEEN ? AND ?")
-                    params.append(dt_local_to_sqlite(dt_from))
-                    params.append(dt_local_to_sqlite(dt_to))
+                if visit_dt:
+                    where.append("a.visit_datetime = ?")
+                    params.append(visit_dt)
                 sql = """
                     SELECT
                     a.id,
@@ -1198,6 +1240,11 @@ def create_app() -> Flask:
             doctors=doctors,
             specialties=specialties,
             cabinets=cabinets,
+            patient_names=patient_names,
+            phones=phones,
+            birth_dates=birth_dates,
+            doctor_names=doctor_names,
+            visit_datetimes=visit_datetimes,
         )
 
     @app.get("/api/options/visits-by-patient")
