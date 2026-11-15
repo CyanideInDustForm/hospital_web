@@ -528,13 +528,16 @@ def create_app() -> Flask:
             items = rows
 
         # Внешняя лента с полем замены (п. 6 правок преподавателя).
-        # Выбранная лента запоминается в сессии: при переключении вкладок
-        # (общие/сайт/rss) лента не сбрасывается на ленту по умолчанию,
-        # а при замене ленты показывается сообщение о подключении.
+        # Выбранная лента запоминается в сессии: если потом пощёлкать
+        # «Новости сайта» и вернуться — показывается та же лента, а не
+        # лента по умолчанию (замечание преподавателя).
         feed_param = (request.args.get("feed") or "").strip()
+        prev_feed = session.get("rss_feed")
         if feed_param:
             session["rss_feed"] = feed_param
-        feed_url = feed_param or session.get("rss_feed") or DEFAULT_RSS_FEED
+            feed_url = feed_param
+        else:
+            feed_url = session.get("rss_feed") or DEFAULT_RSS_FEED
         feed_items: List[Dict[str, str]] = []
         feed_error = None
         feed_title = ""
@@ -549,16 +552,16 @@ def create_app() -> Flask:
                     if all(w in (it["title"] + " " + it["description"]).lower() for w in words)
                 ]
 
-            # Тост при каждом явном нажатии «Заменить ленту» (маркер feedset
-            # в форме ленты, чтобы поиск/вкладки не вызывали тост повторно):
-            # либо успех, либо предупреждение (текст совпадает с блоком на странице)
-            if feed_param and request.args.get("feedset") == "1":
+            # Сообщение при каждом явном нажатии «Заменить ленту» (маркер feedset)
+            # или при смене адреса через ссылку/редирект: зелёный тост с названием
+            # канала при успехе, жёлтый — с текстом постоянного блока при ошибке
+            if feed_param and (request.args.get("feedset") == "1" or feed_param != prev_feed):
                 if feed_error:
                     flash("Внешняя лента сейчас недоступна. "
                           "Новости поликлиники при этом продолжают работать.", "warning")
                 else:
-                    where = f'RSS-лента «{feed_title}»' if feed_title else "RSS-лента"
-                    flash(f"{where} подключена ({feed_param})", "success")
+                    where = f' «{feed_title}»' if feed_title else ""
+                    flash(f"Подключена новостная лента{where} ({feed_param})", "success")
 
         # Постоянный цветной блок о состоянии ленты (серверный HTML,
         # не зависит от JS): зелёный при успехе, жёлтый при ошибке
@@ -1055,24 +1058,15 @@ def create_app() -> Flask:
         doctors = query_all("SELECT id, full_name FROM doctors ORDER BY full_name;")
         specialties = query_all("SELECT DISTINCT specialty FROM doctors ORDER BY specialty;")
         cabinets = query_all("SELECT DISTINCT cabinet FROM doctors ORDER BY cabinet;")
+        # Списки значений для выпадающих меню: все критерии поиска
+        # выбираются из реальных данных БД, чтобы результат был всегда
+        # (замечание преподавателя: «все поиски — через всплывающие меню»)
+        phones = query_all("SELECT DISTINCT phone FROM patients ORDER BY phone;")
+        birth_dates = query_all("SELECT DISTINCT birth_date FROM patients ORDER BY birth_date;")
+        visit_dates = query_all(
+            "SELECT DISTINCT date(visit_datetime) AS d FROM appointments ORDER BY d DESC;"
+        )
         visits: List[str] = []
-
-        # Значения для выпадающих списков поиска по одной таблице
-        # (правка преподавателя: поиск только через выпадающие меню,
-        # чтобы выбранное значение всегда давало результат)
-        patient_names = query_all(
-            "SELECT DISTINCT full_name FROM patients ORDER BY full_name;")
-        phones = query_all(
-            "SELECT DISTINCT phone FROM patients "
-            "WHERE phone IS NOT NULL AND phone != '' ORDER BY phone;")
-        birth_dates = query_all(
-            "SELECT DISTINCT birth_date FROM patients "
-            "WHERE birth_date IS NOT NULL ORDER BY birth_date DESC;")
-        doctor_names = query_all(
-            "SELECT DISTINCT full_name FROM doctors ORDER BY full_name;")
-        visit_datetimes = query_all(
-            "SELECT DISTINCT visit_datetime FROM appointments "
-            "ORDER BY visit_datetime DESC;")
 
         if mode == "one":
             entity = request.args.get("entity", "patients")
@@ -1131,7 +1125,7 @@ def create_app() -> Flask:
             elif entity == "appointments":
                 status_id = (request.args.get("status_id") or "").strip()
                 payment_type_id = (request.args.get("payment_type_id") or "").strip()
-                visit_dt = (request.args.get("visit_datetime") or "").strip()
+                visit_date = (request.args.get("visit_date") or "").strip()
 
                 where = []
                 params: List[Any] = []
@@ -1142,9 +1136,9 @@ def create_app() -> Flask:
                 if payment_type_id:
                     where.append("a.payment_type_id = ?")
                     params.append(int(payment_type_id))
-                if visit_dt:
-                    where.append("a.visit_datetime = ?")
-                    params.append(visit_dt)
+                if visit_date:
+                    where.append("date(a.visit_datetime) = ?")
+                    params.append(visit_date)
                 sql = """
                     SELECT
                     a.id,
@@ -1172,14 +1166,19 @@ def create_app() -> Flask:
         elif mode == "two":
             patient_id = (request.args.get("patient_id") or "").strip()
             visit_dt = (request.args.get("visit_datetime") or "").strip()
-            date_from = (request.args.get("date_from") or "").strip()
-            date_to = (request.args.get("date_to") or "").strip()
             meta["patient_id"] = patient_id
             meta["visit_datetime"] = visit_dt
-            meta["date_from"] = date_from
-            meta["date_to"] = date_to
 
-            if patient_id or (date_from and date_to):
+            if patient_id:
+                # Даты приёмов выбранного пациента — для синхронизированного
+                # второго списка (замечание преподавателя: не фильтрация,
+                # а синхронизация — даты появляются сразу при выборе пациента)
+                visits = [r["visit_datetime"] for r in query_all(
+                    "SELECT visit_datetime FROM appointments WHERE patient_id = ? "
+                    "ORDER BY visit_datetime DESC;",
+                    (int(patient_id),),
+                )]
+
                 sql = """
                     SELECT
                       p.full_name AS patient_name,
@@ -1189,29 +1188,14 @@ def create_app() -> Flask:
                     FROM appointments a
                     JOIN patients p ON p.id = a.patient_id
                     JOIN doctors d ON d.id = a.doctor_id
+                    WHERE a.patient_id = ?
                 """
-                where = []
-                params: List[Any] = []
-                if patient_id:
-                    where.append("a.patient_id = ?")
-                    params.append(int(patient_id))
-                if visit_dt and patient_id:
-                    where.append("a.visit_datetime = ?")
+                params: List[Any] = [int(patient_id)]
+                if visit_dt:
+                    sql += " AND a.visit_datetime = ?"
                     params.append(dt_local_to_sqlite(visit_dt))
-                if date_from and date_to:
-                    where.append("date(a.visit_datetime) BETWEEN ? AND ?")
-                    params.extend([date_from, date_to])
-                if where:
-                    sql += " WHERE " + " AND ".join(where)
                 sql += " ORDER BY a.visit_datetime DESC LIMIT 200;"
                 results = query_all(sql, tuple(params))
-
-                if patient_id:
-                    visits = [r["visit_datetime"] for r in query_all(
-                        "SELECT visit_datetime FROM appointments WHERE patient_id = ? "
-                        "ORDER BY visit_datetime DESC;",
-                        (int(patient_id),),
-                    )]
 
         elif mode == "agg":
             results = query_all("""
@@ -1240,11 +1224,9 @@ def create_app() -> Flask:
             doctors=doctors,
             specialties=specialties,
             cabinets=cabinets,
-            patient_names=patient_names,
             phones=phones,
             birth_dates=birth_dates,
-            doctor_names=doctor_names,
-            visit_datetimes=visit_datetimes,
+            visit_dates=visit_dates,
         )
 
     @app.get("/api/options/visits-by-patient")
