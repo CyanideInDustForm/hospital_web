@@ -99,9 +99,18 @@ t = r.get_data(as_text=True)
 assert "Тестовая внешняя новость" in t, "внешняя лента не подключилась"
 assert "замен" in t.lower() or "Заменить ленту" in t
 print("OK  ЛР4: поле замены ленты работает, внешние новости показаны")
+assert "Подключена новостная лента" in t, "нет сообщения о подключении RSS"
+print("OK  ЛР4: сообщение о подключении RSS-ленты (flash)")
 own = sqlite3.connect("data/site.sqlite3").execute("SELECT title FROM news LIMIT 1").fetchone()
 assert own and own[0] in t, "свои новости не показаны"
 print("OK  ЛР4: свои новости из БД рядом с внешней лентой")
+
+# лента запоминается в сессии: возвращаемся на /news без ?feed= — та же лента,
+# а не лента по умолчанию (замечание преподавателя)
+r = c.get("/news?mode=rss")
+t2 = r.get_data(as_text=True)
+assert "Тестовая внешняя новость" in t2, "выбранная лента не сохранилась в сессии"
+print("OK  ЛР4: выбранная RSS-лента запоминается (сессия)")
 
 r = c.get("/rss", follow_redirects=True)  # дефолтная лента — может быть недоступна офлайн, страница всё равно 200
 check("ЛР4: /rss (лента по умолчанию)", r)
@@ -161,6 +170,53 @@ c.get("/rss"); c.get("/rss")
 after = sdb.execute("SELECT COUNT(*) FROM page_visits WHERE page_key='rss'").fetchone()[0]
 assert after - before == 2
 print("OK  счётчик посещений работает на новых страницах")
+
+# ========== 8. Поиск по БД — все критерии через выпадающие списки ==========
+# (замечание преподавателя: никакого ручного ввода дат/телефонов)
+pat = db.execute("SELECT id, full_name, phone, birth_date FROM patients LIMIT 1").fetchone()
+r = c.get("/dbsearch?mode=one&entity=patients&full_name=" + urllib.parse.quote(pat["full_name"]))
+check("dbsearch: пациент по ФИО из списка", r)
+assert pat["full_name"] in r.get_data(as_text=True)
+r = c.get("/dbsearch?mode=one&entity=patients&phone=" + urllib.parse.quote(pat["phone"]))
+assert pat["full_name"] in r.get_data(as_text=True)
+r = c.get("/dbsearch?mode=one&entity=patients&birth_date=" + pat["birth_date"])
+assert pat["full_name"] in r.get_data(as_text=True)
+print("OK  dbsearch: пациент ищется по ФИО/телефону/дате рождения из списков")
+
+appt = db.execute("SELECT patient_id, visit_datetime FROM appointments LIMIT 1").fetchone()
+r = c.get("/dbsearch?mode=one&entity=appointments&visit_date=" + appt["visit_datetime"][:10])
+check("dbsearch: приёмы по дате из списка", r)
+assert appt["visit_datetime"][:10] in r.get_data(as_text=True)
+print("OK  dbsearch: приёмы ищутся по дате из списка")
+
+# синхронизация «пациент → даты приёмов»: выбор пациента сразу даёт и даты,
+# и результат (замечание преподавателя)
+r = c.get(f"/dbsearch?mode=two&patient_id={appt['patient_id']}")
+check("dbsearch: две таблицы, пациент", r)
+t = r.get_data(as_text=True)
+assert appt["visit_datetime"] in t, "даты приёмов пациента не подставились в список"
+print("OK  dbsearch: при выборе пациента автоматически появляются даты приёмов")
+r = c.get(f"/dbsearch?mode=two&patient_id={appt['patient_id']}&visit_datetime="
+          + urllib.parse.quote(appt["visit_datetime"]))
+assert appt["visit_datetime"] in r.get_data(as_text=True)
+print("OK  dbsearch: уточнение по дате приёма работает")
+
+# в форме не осталось полей свободного ввода критериев
+t = c.get("/dbsearch?mode=one").get_data(as_text=True)
+for gone in ["full_name_prefix", "phone_contains", "birth_date_from", "birth_date_to"]:
+    assert gone not in t, f"осталось поле свободного ввода: {gone}"
+t = c.get("/dbsearch?mode=two").get_data(as_text=True)
+assert "date_from" not in t and "date_to" not in t
+print("OK  dbsearch: полей свободного ввода критериев больше нет")
+
+# ---------- Чистка тестовых данных ----------
+sdb.execute("DELETE FROM users WHERE username IN ('petrov_test','ivanova_test');")
+sdb.execute("DELETE FROM reviews WHERE author_name IN ('Тест Петров','Тест Иванова');")
+sdb.execute("DELETE FROM guestbook WHERE author_name IN ('Тест Петров','Тест Иванова');")
+sdb.commit()
+pdb.execute("DELETE FROM patients WHERE full_name IN ('Тест Петров','Тест Иванова');")
+pdb.commit()
+print("OK  тестовые данные удалены из обеих БД")
 
 print()
 print("ПРОВАЛЕНО:", failed if failed else "нет — все проверки пройдены")

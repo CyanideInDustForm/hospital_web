@@ -527,12 +527,24 @@ def create_app() -> Flask:
                 ]
             items = rows
 
-        # Внешняя лента с полем замены (п. 6 правок преподавателя)
-        feed_url = (request.args.get("feed") or "").strip() or DEFAULT_RSS_FEED
+        # Внешняя лента с полем замены (п. 6 правок преподавателя).
+        # Выбранная лента запоминается в сессии: если потом пощёлкать
+        # «Новости сайта» и вернуться — показывается та же лента, а не
+        # лента по умолчанию (замечание преподавателя).
+        feed_param = (request.args.get("feed") or "").strip()
+        if feed_param:
+            if feed_param != session.get("rss_feed"):
+                session["rss_feed"] = feed_param
+                flash(f"Подключена новостная лента: {feed_param}", "success")
+            feed_url = feed_param
+        else:
+            feed_url = session.get("rss_feed") or DEFAULT_RSS_FEED
         feed_items: List[Dict[str, str]] = []
         feed_error = None
         if mode in ("all", "rss"):
             feed_items, feed_error = fetch_rss_items(feed_url)
+            if feed_error:
+                flash(f"Не удалось подключить RSS-ленту {feed_url}: {feed_error}", "danger")
 
             # Поиск распространяется и на внешнюю ленту: оставляем только
             # новости, где все слова запроса встречаются в заголовке или описании
@@ -1021,6 +1033,14 @@ def create_app() -> Flask:
         doctors = query_all("SELECT id, full_name FROM doctors ORDER BY full_name;")
         specialties = query_all("SELECT DISTINCT specialty FROM doctors ORDER BY specialty;")
         cabinets = query_all("SELECT DISTINCT cabinet FROM doctors ORDER BY cabinet;")
+        # Списки значений для выпадающих меню: все критерии поиска
+        # выбираются из реальных данных БД, чтобы результат был всегда
+        # (замечание преподавателя: «все поиски — через всплывающие меню»)
+        phones = query_all("SELECT DISTINCT phone FROM patients ORDER BY phone;")
+        birth_dates = query_all("SELECT DISTINCT birth_date FROM patients ORDER BY birth_date;")
+        visit_dates = query_all(
+            "SELECT DISTINCT date(visit_datetime) AS d FROM appointments ORDER BY d DESC;"
+        )
         visits: List[str] = []
 
         if mode == "one":
@@ -1028,29 +1048,22 @@ def create_app() -> Flask:
             meta["entity"] = entity
 
             if entity == "patients":
-                full_name_prefix = (request.args.get("full_name_prefix") or "").strip()
-                phone_contains = (request.args.get("phone_contains") or "").strip()
-                bd_from = (request.args.get("birth_date_from") or "").strip()
-                bd_to = (request.args.get("birth_date_to") or "").strip()
+                full_name = (request.args.get("full_name") or "").strip()
+                phone = (request.args.get("phone") or "").strip()
+                birth_date = (request.args.get("birth_date") or "").strip()
 
                 where = []
                 params: List[Any] = []
 
-                if full_name_prefix:
-                    where.append("full_name LIKE ?")
-                    params.append(full_name_prefix + "%")
-                if phone_contains:
-                    where.append("phone LIKE ?")
-                    params.append("%" + phone_contains + "%")
-                if bd_from and bd_to:
-                    where.append("birth_date BETWEEN ? AND ?")
-                    params.extend([bd_from, bd_to])
-                elif bd_from:
-                    where.append("birth_date >= ?")
-                    params.append(bd_from)
-                elif bd_to:
-                    where.append("birth_date <= ?")
-                    params.append(bd_to)
+                if full_name:
+                    where.append("full_name = ?")
+                    params.append(full_name)
+                if phone:
+                    where.append("phone = ?")
+                    params.append(phone)
+                if birth_date:
+                    where.append("birth_date = ?")
+                    params.append(birth_date)
 
                 sql = "SELECT id, full_name, phone, email, birth_date FROM patients"
                 if where:
@@ -1060,16 +1073,16 @@ def create_app() -> Flask:
                 results = query_all(sql, tuple(params))
 
             elif entity == "doctors":
-                full_name_prefix = (request.args.get("full_name_prefix") or "").strip()
+                full_name = (request.args.get("full_name") or "").strip()
                 specialty = (request.args.get("specialty") or "").strip()
                 cabinet = (request.args.get("cabinet") or "").strip()
 
                 where = []
                 params: List[Any] = []
 
-                if full_name_prefix:
-                    where.append("full_name LIKE ?")
-                    params.append(full_name_prefix + "%")
+                if full_name:
+                    where.append("full_name = ?")
+                    params.append(full_name)
                 if specialty:
                     where.append("specialty = ?")
                     params.append(specialty)
@@ -1087,8 +1100,7 @@ def create_app() -> Flask:
             elif entity == "appointments":
                 status_id = (request.args.get("status_id") or "").strip()
                 payment_type_id = (request.args.get("payment_type_id") or "").strip()
-                dt_from = (request.args.get("visit_from") or "").strip()
-                dt_to = (request.args.get("visit_to") or "").strip()
+                visit_date = (request.args.get("visit_date") or "").strip()
 
                 where = []
                 params: List[Any] = []
@@ -1099,10 +1111,9 @@ def create_app() -> Flask:
                 if payment_type_id:
                     where.append("a.payment_type_id = ?")
                     params.append(int(payment_type_id))
-                if dt_from and dt_to:
-                    where.append("a.visit_datetime BETWEEN ? AND ?")
-                    params.append(dt_local_to_sqlite(dt_from))
-                    params.append(dt_local_to_sqlite(dt_to))
+                if visit_date:
+                    where.append("date(a.visit_datetime) = ?")
+                    params.append(visit_date)
                 sql = """
                     SELECT
                     a.id,
@@ -1130,14 +1141,19 @@ def create_app() -> Flask:
         elif mode == "two":
             patient_id = (request.args.get("patient_id") or "").strip()
             visit_dt = (request.args.get("visit_datetime") or "").strip()
-            date_from = (request.args.get("date_from") or "").strip()
-            date_to = (request.args.get("date_to") or "").strip()
             meta["patient_id"] = patient_id
             meta["visit_datetime"] = visit_dt
-            meta["date_from"] = date_from
-            meta["date_to"] = date_to
 
-            if patient_id or (date_from and date_to):
+            if patient_id:
+                # Даты приёмов выбранного пациента — для синхронизированного
+                # второго списка (замечание преподавателя: не фильтрация,
+                # а синхронизация — даты появляются сразу при выборе пациента)
+                visits = [r["visit_datetime"] for r in query_all(
+                    "SELECT visit_datetime FROM appointments WHERE patient_id = ? "
+                    "ORDER BY visit_datetime DESC;",
+                    (int(patient_id),),
+                )]
+
                 sql = """
                     SELECT
                       p.full_name AS patient_name,
@@ -1147,29 +1163,14 @@ def create_app() -> Flask:
                     FROM appointments a
                     JOIN patients p ON p.id = a.patient_id
                     JOIN doctors d ON d.id = a.doctor_id
+                    WHERE a.patient_id = ?
                 """
-                where = []
-                params: List[Any] = []
-                if patient_id:
-                    where.append("a.patient_id = ?")
-                    params.append(int(patient_id))
-                if visit_dt and patient_id:
-                    where.append("a.visit_datetime = ?")
+                params: List[Any] = [int(patient_id)]
+                if visit_dt:
+                    sql += " AND a.visit_datetime = ?"
                     params.append(dt_local_to_sqlite(visit_dt))
-                if date_from and date_to:
-                    where.append("date(a.visit_datetime) BETWEEN ? AND ?")
-                    params.extend([date_from, date_to])
-                if where:
-                    sql += " WHERE " + " AND ".join(where)
                 sql += " ORDER BY a.visit_datetime DESC LIMIT 200;"
                 results = query_all(sql, tuple(params))
-
-                if patient_id:
-                    visits = [r["visit_datetime"] for r in query_all(
-                        "SELECT visit_datetime FROM appointments WHERE patient_id = ? "
-                        "ORDER BY visit_datetime DESC;",
-                        (int(patient_id),),
-                    )]
 
         elif mode == "agg":
             results = query_all("""
@@ -1198,6 +1199,9 @@ def create_app() -> Flask:
             doctors=doctors,
             specialties=specialties,
             cabinets=cabinets,
+            phones=phones,
+            birth_dates=birth_dates,
+            visit_dates=visit_dates,
         )
 
     @app.get("/api/options/visits-by-patient")
