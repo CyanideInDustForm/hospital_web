@@ -532,19 +532,17 @@ def create_app() -> Flask:
         # «Новости сайта» и вернуться — показывается та же лента, а не
         # лента по умолчанию (замечание преподавателя).
         feed_param = (request.args.get("feed") or "").strip()
+        prev_feed = session.get("rss_feed")
         if feed_param:
-            if feed_param != session.get("rss_feed"):
-                session["rss_feed"] = feed_param
-                flash(f"Подключена новостная лента: {feed_param}", "success")
+            session["rss_feed"] = feed_param
             feed_url = feed_param
         else:
             feed_url = session.get("rss_feed") or DEFAULT_RSS_FEED
         feed_items: List[Dict[str, str]] = []
         feed_error = None
+        feed_title = ""
         if mode in ("all", "rss"):
-            feed_items, feed_error = fetch_rss_items(feed_url)
-            if feed_error:
-                flash(f"Не удалось подключить RSS-ленту {feed_url}: {feed_error}", "danger")
+            feed_items, feed_error, feed_title = fetch_rss_items(feed_url)
 
             # Поиск распространяется и на внешнюю ленту: оставляем только
             # новости, где все слова запроса встречаются в заголовке или описании
@@ -553,6 +551,24 @@ def create_app() -> Flask:
                     it for it in feed_items
                     if all(w in (it["title"] + " " + it["description"]).lower() for w in words)
                 ]
+
+            # Сообщение при каждом явном нажатии «Заменить ленту» (маркер feedset)
+            # или при смене адреса через ссылку/редирект: зелёный тост с названием
+            # канала при успехе, жёлтый — при ошибке (замечание преподавателя:
+            # «Нет сообщений о подключении RSS»)
+            if feed_param and (request.args.get("feedset") == "1" or feed_param != prev_feed):
+                if feed_error:
+                    flash("Внешняя лента сейчас недоступна. "
+                          "Новости поликлиники при этом продолжают работать.", "warning")
+                else:
+                    where = f' «{feed_title}»' if feed_title else ""
+                    flash(f"Подключена новостная лента{where} ({feed_param})", "success")
+
+        # Постоянный цветной блок о состоянии ленты (серверный HTML, виден
+        # даже без JS): зелёный при успехе, жёлтый при ошибке
+        feed_ok = None
+        if mode in ("all", "rss") and not feed_error:
+            feed_ok = f"Внешняя лента {feed_url} успешно загружена."
 
         # Режим «all»: единая лента — свои новости и RSS вперемешку, свежие сверху
         merged: List[Dict[str, Any]] = []
@@ -583,6 +599,7 @@ def create_app() -> Flask:
             feed_url=feed_url,
             feed_items=feed_items,
             feed_error=feed_error,
+            feed_ok=feed_ok,
             merged=merged,
         )
 
@@ -756,8 +773,8 @@ def create_app() -> Flask:
     #  ЛР4 — ОБМЕН ДАННЫМИ: объединённые новости (свои + внешняя RSS)
     # ==================================================================
 
-    def fetch_rss_items(feed_url: str, limit: int = 10) -> Tuple[List[Dict[str, str]], Optional[str]]:
-        """Скачивает RSS/Atom-ленту и возвращает (элементы, ошибка)."""
+    def fetch_rss_items(feed_url: str, limit: int = 10) -> Tuple[List[Dict[str, str]], Optional[str], str]:
+        """Скачивает RSS/Atom-ленту и возвращает (элементы, ошибка, название канала)."""
         items: List[Dict[str, str]] = []
         try:
             req = urllib.request.Request(
@@ -773,6 +790,8 @@ def create_app() -> Flask:
                 return (child.text or "").strip() if child is not None and child.text else ""
 
             # RSS 2.0: rss > channel > item
+            channel = root.find("channel")
+            channel_title = (channel.findtext("title") or "").strip() if channel is not None else ""
             for item in root.iter("item"):
                 items.append({
                     "title": text_of(item, "title") or "(без заголовка)",
@@ -784,6 +803,7 @@ def create_app() -> Flask:
             # Atom: feed > entry
             if not items:
                 ns = {"a": "http://www.w3.org/2005/Atom"}
+                channel_title = (root.findtext("a:title", "", ns) or "").strip()
                 for entry in root.findall("a:entry", ns):
                     link_el = entry.find("a:link", ns)
                     items.append({
@@ -794,9 +814,15 @@ def create_app() -> Flask:
                                               entry.findtext("a:summary", "", ns) or "")[:300],
                         "source": feed_url,
                     })
-            return items[:limit], None
+            if not items:
+                # Некоторые сайты на неверный адрес отвечают редиректом на
+                # страницу ошибки с HTTP 200 и валидным, но пустым RSS —
+                # считаем такой ответ ошибкой, а не успешным подключением.
+                return [], ("Лента не содержит записей — проверьте адрес: "
+                            "сервер мог ответить страницей ошибки с кодом 200."), channel_title
+            return items[:limit], None, channel_title
         except Exception as e:  # сеть, XML, таймаут — показываем ошибку на странице
-            return [], str(e)
+            return [], str(e), ""
 
     @app.get("/rss")
     def rss():
@@ -947,6 +973,28 @@ def create_app() -> Flask:
             doctor_comment = request.form.get("doctor_comment")
             doctor_comment = doctor_comment.strip() if doctor_comment else None
 
+            # Проверка на дубль ДО вставки (замечание преподавателя:
+            # повторные нажатия «Сохранить» создавали дубли записей)
+            dup = query_all(
+                """
+                SELECT a.id, p.full_name AS patient_name, d.full_name AS doctor_name
+                FROM appointments a
+                JOIN patients p ON p.id = a.patient_id
+                JOIN doctors  d ON d.id = a.doctor_id
+                WHERE a.doctor_id = ? AND a.visit_datetime = ?;
+                """,
+                (doctor_id, visit_dt),
+            )
+            if dup:
+                flash(
+                    f"Такая запись уже существует: на {visit_dt} к врачу "
+                    f"{dup[0]['doctor_name']} уже записан пациент "
+                    f"{dup[0]['patient_name']} (запись № {dup[0]['id']}). "
+                    f"Дубль не создан.",
+                    "warning",
+                )
+                return redirect(url_for("app_home"))
+
             execute("""
                 INSERT INTO appointments(
                     patient_id, doctor_id, status_id, payment_type_id,
@@ -959,7 +1007,12 @@ def create_app() -> Flask:
         except (ValueError, KeyError):
             flash("Некорректные данные формы. Проверьте поля.", "danger")
         except sqlite3.IntegrityError as e:
-            flash(f"Ошибка БД: {e}", "danger")
+            if "UNIQUE constraint failed" in str(e):
+                # То же понятное сообщение, если дубль поймала сама БД
+                flash("Такая запись уже существует: этот врач на это время "
+                      "уже занят. Дубль не создан.", "warning")
+            else:
+                flash(f"Ошибка БД: {e}", "danger")
         return redirect(url_for("app_home"))
 
     # ---------- API для модалок ----------
@@ -1065,12 +1118,14 @@ def create_app() -> Flask:
                     where.append("birth_date = ?")
                     params.append(birth_date)
 
-                sql = "SELECT id, full_name, phone, email, birth_date FROM patients"
+                # Усечение результатов, как в поиске по двум таблицам:
+                # без выбранных критериев таблица целиком не выгружается
                 if where:
-                    sql += " WHERE " + " AND ".join(where)
-                sql += " ORDER BY full_name LIMIT 200;"
-
-                results = query_all(sql, tuple(params))
+                    sql = ("SELECT id, full_name, phone, email, birth_date FROM patients"
+                           " WHERE " + " AND ".join(where)
+                           + " ORDER BY full_name LIMIT 200;")
+                    results = query_all(sql, tuple(params))
+                    meta["searched"] = True
 
             elif entity == "doctors":
                 full_name = (request.args.get("full_name") or "").strip()
@@ -1090,12 +1145,12 @@ def create_app() -> Flask:
                     where.append("cabinet = ?")
                     params.append(cabinet)
 
-                sql = "SELECT id, full_name, specialty, cabinet, phone FROM doctors"
                 if where:
-                    sql += " WHERE " + " AND ".join(where)
-                sql += " ORDER BY full_name LIMIT 200;"
-
-                results = query_all(sql, tuple(params))
+                    sql = ("SELECT id, full_name, specialty, cabinet, phone FROM doctors"
+                           " WHERE " + " AND ".join(where)
+                           + " ORDER BY full_name LIMIT 200;")
+                    results = query_all(sql, tuple(params))
+                    meta["searched"] = True
 
             elif entity == "appointments":
                 status_id = (request.args.get("status_id") or "").strip()
@@ -1134,15 +1189,16 @@ def create_app() -> Flask:
                 """
                 if where:
                     sql += " WHERE " + " AND ".join(where)
-                sql += " ORDER BY a.visit_datetime DESC LIMIT 200;"
-
-                results = query_all(sql, tuple(params))
+                    sql += " ORDER BY a.visit_datetime DESC LIMIT 200;"
+                    results = query_all(sql, tuple(params))
+                    meta["searched"] = True
 
         elif mode == "two":
             patient_id = (request.args.get("patient_id") or "").strip()
             visit_dt = (request.args.get("visit_datetime") or "").strip()
             meta["patient_id"] = patient_id
             meta["visit_datetime"] = visit_dt
+            meta["searched"] = bool(patient_id)
 
             if patient_id:
                 # Даты приёмов выбранного пациента — для синхронизированного
@@ -1173,6 +1229,7 @@ def create_app() -> Flask:
                 results = query_all(sql, tuple(params))
 
         elif mode == "agg":
+            meta["searched"] = True
             results = query_all("""
                 SELECT
                   d.full_name AS doctor_name,
@@ -1367,6 +1424,16 @@ def create_app() -> Flask:
                 flash("Врач добавлен.", "success")
 
             elif table == "appointments":
+                # Проверка на дубль: врач + дата/время должны быть уникальны
+                dup = query_all(
+                    "SELECT id FROM appointments WHERE doctor_id = ? AND visit_datetime = ?;",
+                    (int(request.form["doctor_id"]),
+                     dt_local_to_sqlite(request.form["visit_datetime"])),
+                )
+                if dup:
+                    flash("Такая запись уже существует: этот врач на это время "
+                          "уже занят. Дубль не создан.", "warning")
+                    return redirect(url_for("admin", table=table))
                 execute("""
                     INSERT INTO appointments(
                       patient_id, doctor_id, status_id, payment_type_id,
@@ -1394,7 +1461,11 @@ def create_app() -> Flask:
                 flash("Тип оплаты добавлен.", "success")
 
         except sqlite3.IntegrityError as e:
-            flash(f"Ошибка ограничения: {e}", "danger")
+            if "UNIQUE constraint failed" in str(e):
+                flash("Такая запись уже существует (нарушение уникальности). "
+                      "Дубль не создан.", "warning")
+            else:
+                flash(f"Ошибка ограничения: {e}", "danger")
         except (ValueError, KeyError):
             flash("Некорректные данные формы.", "danger")
 
@@ -1477,7 +1548,11 @@ def create_app() -> Flask:
                 flash("Запись обновлена.", "success")
 
         except sqlite3.IntegrityError as e:
-            flash(f"Ошибка ограничения: {e}", "danger")
+            if "UNIQUE constraint failed" in str(e):
+                flash("Такая запись уже существует (нарушение уникальности). "
+                      "Дубль не создан.", "warning")
+            else:
+                flash(f"Ошибка ограничения: {e}", "danger")
         except (ValueError, KeyError):
             flash("Некорректные данные формы.", "danger")
 

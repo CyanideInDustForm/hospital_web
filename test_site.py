@@ -82,6 +82,30 @@ assert new_a is not None
 print("OK  ЛР3: запись с ценой по категории сохранена")
 db.execute("DELETE FROM appointments WHERE id=?", (new_a["id"],)); db.commit()
 
+# Замечание преподавателя: повторные нажатия «Сохранить» не должны плодить дубли —
+# вторая отправка той же формы блокируется с понятным сообщением
+dup_payload = {
+    "patient_id": 1, "doctor_id": doc["id"], "status_id": 1, "payment_type_id": 3,
+    "visit_datetime": "2027-02-02T11:00", "reason": "Плановый осмотр и консультация",
+    "duration_minutes": 20, "price": "2500", "doctor_comment": "",
+}
+r = c.post("/appointments/create", data=dup_payload, follow_redirects=True)
+check("Дубли: первая запись создана", r)
+assert "Запись успешно создана" in r.get_data(as_text=True), "нет сообщения об успешной записи"
+print("OK  Сообщение об успешной записи показывается")
+cnt_sql = ("SELECT COUNT(*) FROM appointments "
+           "WHERE doctor_id=? AND visit_datetime='2027-02-02 11:00:00'")
+cnt1 = db.execute(cnt_sql, (doc["id"],)).fetchone()[0]
+assert cnt1 == 1
+r = c.post("/appointments/create", data=dup_payload, follow_redirects=True)
+t = r.get_data(as_text=True)
+assert "уже существует" in t and "Дубль не создан" in t, "нет предупреждения о дубле"
+cnt2 = db.execute(cnt_sql, (doc["id"],)).fetchone()[0]
+assert cnt2 == 1, "дубль всё-таки создался"
+print("OK  Дубли: повторная отправка заблокирована, запись одна, сообщение понятное")
+db.execute("DELETE FROM appointments WHERE doctor_id=? AND visit_datetime='2027-02-02 11:00:00'",
+           (doc["id"],)); db.commit()
+
 # ========== 4. ЛР4: объединённые новости + замена ленты + экспорт ==========
 # фиктивная RSS-лента для теста (file://)
 fixture = os.path.abspath("test_feed.xml")
@@ -101,6 +125,23 @@ assert "замен" in t.lower() or "Заменить ленту" in t
 print("OK  ЛР4: поле замены ленты работает, внешние новости показаны")
 assert "Подключена новостная лента" in t, "нет сообщения о подключении RSS"
 print("OK  ЛР4: сообщение о подключении RSS-ленты (flash)")
+
+# замечание: новые вкладки не плодим — app.js снимает target="_blank"
+# у всех ссылок при загрузке любой страницы (централизованно, одна точка)
+js = c.get("/static/app.js").get_data(as_text=True)
+assert 'a[target="_blank"]' in js and 'removeAttribute("target")' in js, \
+    "в app.js нет снятия target=_blank"
+print("OK  новых вкладок нет: target=_blank снимается централизованно в app.js")
+
+# замечание преподавателя «сообщения ... не исправлено»: сообщение появляется
+# при КАЖДОМ явном нажатии «Заменить ленту» (маркер feedset=1), даже если адрес
+# тот же; плюс на странице есть постоянный цветной блок о состоянии ленты
+fixture_url = 'file:///' + fixture.replace(os.sep, '/')
+r = c.get(f"/news?feed={urllib.parse.quote(fixture_url)}&feedset=1")
+t = r.get_data(as_text=True)
+assert "Подключена новостная лента" in t, "нет сообщения при повторной замене ленты"
+assert "успешно загружена" in t, "нет постоянного блока о состоянии ленты"
+print("OK  ЛР4: сообщение при каждой замене ленты + постоянный блок статуса")
 own = sqlite3.connect("data/site.sqlite3").execute("SELECT title FROM news LIMIT 1").fetchone()
 assert own and own[0] in t, "свои новости не показаны"
 print("OK  ЛР4: свои новости из БД рядом с внешней лентой")
@@ -188,6 +229,13 @@ r = c.get("/dbsearch?mode=one&entity=appointments&visit_date=" + appt["visit_dat
 check("dbsearch: приёмы по дате из списка", r)
 assert appt["visit_datetime"][:10] in r.get_data(as_text=True)
 print("OK  dbsearch: приёмы ищутся по дате из списка")
+
+# усечение результатов, как в поиске по двум таблицам: без критериев
+# таблица целиком не выгружается (замечание: сделать как в режиме «две таблицы»)
+t = c.get("/dbsearch?mode=one").get_data(as_text=True)
+assert "без критериев таблица целиком не показывается" in t, "таблица выгружается без критериев"
+assert "Ничего не найдено" not in t, "ложное «Ничего не найдено» до поиска"
+print("OK  dbsearch: по одной таблице без критериев выгрузки нет (усечение)")
 
 # синхронизация «пациент → даты приёмов»: выбор пациента сразу даёт и даты,
 # и результат (замечание преподавателя)
